@@ -1,0 +1,905 @@
+{
+  "embedder": {
+    "name": "BAAI/bge-small-zh-v1.5",
+    "dim": 512,
+    "space": "BAAI/bge-small-zh-v1.5@512",
+    "backend": "bge",
+    "degraded": false,
+    "degraded_reason": ""
+  },
+  "summary": {
+    "fixed": {
+      "n_cases": 7,
+      "n_answerable": 6,
+      "n_unanswerable": 1,
+      "recall_at_5": 0.8333,
+      "context_recall": 0.6667,
+      "mrr": 0.5278,
+      "faithfulness": 0.75,
+      "answer_relevancy": 0.8333,
+      "citation_validity": 1.0,
+      "refusal_accuracy": 1.0,
+      "false_refusal_rate": 0.1667,
+      "latency_p50_ms": 71245.0,
+      "latency_p95_ms": 112487.0,
+      "cost_per_query_usd": 0.001287,
+      "total_cost_usd": 0.009,
+      "wall_s": 169.1,
+      "embedder": {
+        "name": "BAAI/bge-small-zh-v1.5",
+        "dim": 512,
+        "space": "BAAI/bge-small-zh-v1.5@512",
+        "backend": "bge",
+        "degraded": false,
+        "degraded_reason": ""
+      }
+    },
+    "semantic": {
+      "n_cases": 7,
+      "n_answerable": 6,
+      "n_unanswerable": 1,
+      "recall_at_5": 0.8333,
+      "context_recall": 0.6667,
+      "mrr": 0.7,
+      "faithfulness": 0.7333,
+      "answer_relevancy": 0.8333,
+      "citation_validity": 1.0,
+      "refusal_accuracy": 1.0,
+      "false_refusal_rate": 0.0,
+      "latency_p50_ms": 63552.0,
+      "latency_p95_ms": 124508.0,
+      "cost_per_query_usd": 0.001401,
+      "total_cost_usd": 0.0098,
+      "wall_s": 194.0,
+      "embedder": {
+        "name": "BAAI/bge-small-zh-v1.5",
+        "dim": 512,
+        "space": "BAAI/bge-small-zh-v1.5@512",
+        "backend": "bge",
+        "degraded": false,
+        "degraded_reason": ""
+      }
+    },
+    "structure": {
+      "n_cases": 7,
+      "n_answerable": 6,
+      "n_unanswerable": 1,
+      "recall_at_5": 0.8333,
+      "context_recall": 0.8333,
+      "mrr": 0.7222,
+      "faithfulness": 0.9667,
+      "answer_relevancy": 1.0,
+      "citation_validity": 1.0,
+      "refusal_accuracy": 1.0,
+      "false_refusal_rate": 0.0,
+      "latency_p50_ms": 64354.0,
+      "latency_p95_ms": 120969.0,
+      "cost_per_query_usd": 0.001732,
+      "total_cost_usd": 0.0121,
+      "wall_s": 161.8,
+      "embedder": {
+        "name": "BAAI/bge-small-zh-v1.5",
+        "dim": 512,
+        "space": "BAAI/bge-small-zh-v1.5@512",
+        "backend": "bge",
+        "degraded": false,
+        "degraded_reason": ""
+      }
+    },
+    "parent_child": {
+      "n_cases": 7,
+      "n_answerable": 6,
+      "n_unanswerable": 1,
+      "recall_at_5": 0.8333,
+      "context_recall": 0.8333,
+      "mrr": 0.5889,
+      "faithfulness": 0.9722,
+      "answer_relevancy": 1.0,
+      "citation_validity": 1.0,
+      "refusal_accuracy": 1.0,
+      "false_refusal_rate": 0.0,
+      "latency_p50_ms": 42525.0,
+      "latency_p95_ms": 63685.0,
+      "cost_per_query_usd": 0.001541,
+      "total_cost_usd": 0.0108,
+      "wall_s": 94.1,
+      "embedder": {
+        "name": "BAAI/bge-small-zh-v1.5",
+        "dim": 512,
+        "space": "BAAI/bge-small-zh-v1.5@512",
+        "backend": "bge",
+        "degraded": false,
+        "degraded_reason": ""
+      }
+    }
+  },
+  "calibration": {
+    "curve": [
+      {
+        "threshold": -14.0,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -13.5,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -13.0,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -12.5,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -12.0,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -11.5,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -11.0,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -10.5,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -10.0,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -9.5,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -9.0,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -8.5,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -8.0,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -7.5,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -7.0,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -6.5,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -6.0,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -5.8,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -5.78,
+        "refusal_accuracy": 0.25,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -5.5,
+        "refusal_accuracy": 0.5,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -5.0,
+        "refusal_accuracy": 0.75,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -4.5,
+        "refusal_accuracy": 0.75,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -4.42,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -4.0,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -3.5,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -3.0,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -2.5,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -2.0,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -1.5,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -1.0,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -0.5,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": 0.0,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": 1.72,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0417
+      },
+      {
+        "threshold": 2.63,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0417
+      },
+      {
+        "threshold": 3.65,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.125
+      },
+      {
+        "threshold": 3.94,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.1667
+      },
+      {
+        "threshold": 4.13,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.2083
+      },
+      {
+        "threshold": 5.28,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.25
+      },
+      {
+        "threshold": 5.47,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.25
+      },
+      {
+        "threshold": 5.52,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.3333
+      },
+      {
+        "threshold": 5.77,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.3333
+      },
+      {
+        "threshold": 5.8,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.4167
+      },
+      {
+        "threshold": 5.82,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.4167
+      },
+      {
+        "threshold": 5.99,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.4583
+      },
+      {
+        "threshold": 6.14,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.5417
+      },
+      {
+        "threshold": 6.18,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.5833
+      },
+      {
+        "threshold": 6.19,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.5833
+      },
+      {
+        "threshold": 6.25,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.6667
+      },
+      {
+        "threshold": 6.42,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.75
+      },
+      {
+        "threshold": 6.5,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.7917
+      },
+      {
+        "threshold": 6.61,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.9167
+      },
+      {
+        "threshold": 6.92,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.9583
+      },
+      {
+        "threshold": 7.57,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.9583
+      }
+    ],
+    "recommended": {
+      "threshold": -4.42,
+      "refusal_accuracy": 1.0,
+      "false_refusal": 0.0
+    },
+    "rule": "误拒率 ≤ 15% 的前提下，取拒答准确率最高的阈值（宁可多拒，不可错答）"
+  },
+  "details": {
+    "fixed": [
+      {
+        "id": "d617e3ae484c4ece-000",
+        "strategy": "fixed",
+        "question": "股东大会通过利润分配方案后，公司最迟要在多久内完成股利派发？",
+        "answerable": true,
+        "refused": false,
+        "answer": "股东大会通过利润分配方案后，公司须在2个月内完成股利（或股份）的派发事项[2][3][5]。",
+        "n_citations": 3,
+        "citation_validity": 1.0,
+        "top_score": 6.193,
+        "latency_ms": 110209,
+        "cost_usd": 0.00119518,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 0.3333333333333333
+      },
+      {
+        "id": "d617e3ae484c4ece-001",
+        "strategy": "fixed",
+        "question": "清算组把公司财产清理完，资产负债表和财产清单也编好了，结果发现公司财产不够还债，接下来要怎么做？",
+        "answerable": true,
+        "refused": false,
+        "answer": "清算组应当依法向人民法院申请宣告破产或者破产清算[1][2][3]。人民法院受理破产申请后，清算组应当将清算事务移交给人民法院[1]；公司经人民法院裁定宣告破产后，清算组应当将清算事务移交给人民法院[3]；人民法院宣告手里破产申请后，清算组应当将清算事务移交给人民法院指定的破产管理人[2]。",
+        "n_citations": 3,
+        "citation_validity": 1.0,
+        "top_score": 6.176,
+        "latency_ms": 98195,
+        "cost_usd": 0.00252895,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 1.0
+      },
+      {
+        "id": "d617e3ae484c4ece-002",
+        "strategy": "fixed",
+        "question": "董事会开会通知一般有哪些方式？",
+        "answerable": true,
+        "refused": true,
+        "answer": "LLM 不可用：请检查 DOCUMIND_LLM_BASE_URL / DOCUMIND_LLM_API_KEY（本地 mock 不编答案）。",
+        "n_citations": 0,
+        "citation_validity": 1.0,
+        "top_score": 5.47,
+        "latency_ms": 112487,
+        "cost_usd": 0.00070282,
+        "faithfulness": 0.0,
+        "relevancy": 0,
+        "recall_at_k": 0.0,
+        "context_recall": 0.0,
+        "mrr": 0.0
+      },
+      {
+        "id": "d617e3ae484c4ece-003",
+        "strategy": "fixed",
+        "question": "公司董事、监事和高级管理人员离职后，能不能立刻把自己持有的公司股票卖掉？",
+        "answerable": true,
+        "refused": false,
+        "answer": "不能立刻卖掉。公司董事、监事、高级管理人员离职后半年内不得转让其所持有的本公司股份。[2]",
+        "n_citations": 1,
+        "citation_validity": 1.0,
+        "top_score": 6.247,
+        "latency_ms": 49868,
+        "cost_usd": 0.00137415,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 0.5
+      },
+      {
+        "id": "d617e3ae484c4ece-004",
+        "strategy": "fixed",
+        "question": "如果董事会不同意独立董事提议开临时股东大会，接下来会怎么处理？",
+        "answerable": true,
+        "refused": false,
+        "answer": "董事会不同意独立董事提议召开临时股东会的，应当说明理由并公告。[1][2]",
+        "n_citations": 2,
+        "citation_validity": 1.0,
+        "top_score": 6.419,
+        "latency_ms": 71245,
+        "cost_usd": 0.00119331,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 0.0,
+        "mrr": 0.3333333333333333
+      },
+      {
+        "id": "d617e3ae484c4ece-005",
+        "strategy": "fixed",
+        "question": "公司要是分立了，之前欠的债务应该找谁要？",
+        "answerable": true,
+        "refused": false,
+        "answer": "公司分立前的债务由分立后的公司承担连带责任，债权人可以向分立后的公司主张清偿 [1][2][3][4]。但是，如果公司在分立前与债权人就债务清偿达成的书面协议另有约定，则按照该书面协议约定处理 [1][2][3][4]。",
+        "n_citations": 4,
+        "citation_validity": 1.0,
+        "top_score": 2.63,
+        "latency_ms": 33237,
+        "cost_usd": 0.00165581,
+        "faithfulness": 0.5,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 1.0
+      },
+      {
+        "id": "unans-000",
+        "strategy": "fixed",
+        "question": "年假可以折现吗？",
+        "answerable": false,
+        "refused": true,
+        "answer": "文档中未找到相关条款",
+        "n_citations": 0,
+        "citation_validity": 1.0,
+        "top_score": -5.005,
+        "latency_ms": 32977,
+        "cost_usd": 0.0003608,
+        "faithfulness": null,
+        "relevancy": null,
+        "recall_at_k": 0.0,
+        "context_recall": 0.0,
+        "mrr": 0.0
+      }
+    ],
+    "semantic": [
+      {
+        "id": "d617e3ae484c4ece-000",
+        "strategy": "semantic",
+        "question": "股东大会通过利润分配方案后，公司最迟要在多久内完成股利派发？",
+        "answerable": true,
+        "refused": false,
+        "answer": "股东会（股东大会）对利润分配方案作出决议后，公司最迟须在2个月内完成股利（或股份）的派发事项。[1][2]",
+        "n_citations": 2,
+        "citation_validity": 1.0,
+        "top_score": 6.503,
+        "latency_ms": 76817,
+        "cost_usd": 0.00111521,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 0.0,
+        "mrr": 0.2
+      },
+      {
+        "id": "d617e3ae484c4ece-001",
+        "strategy": "semantic",
+        "question": "清算组把公司财产清理完，资产负债表和财产清单也编好了，结果发现公司财产不够还债，接下来要怎么做？",
+        "answerable": true,
+        "refused": false,
+        "answer": "清算组在清理公司财产、编制资产负债表和财产清单后，发现公司财产不足清偿债务的，应当依法向人民法院申请宣告破产[1][3]；宁波美诺华章程表述为应当依法向人民法院申请破产清算[2]。人民法院受理破产申请后，清算组应当将清算事务移交给人民法院[1]；公司经人民法院裁定宣告破产后，清算组应当将清算事务移交给人民法院[3]；人民法院宣告破产申请后，清算组应当将清算事务移交给人民法院指定的破产管理人[2]。",
+        "n_citations": 3,
+        "citation_validity": 1.0,
+        "top_score": 6.137,
+        "latency_ms": 124508,
+        "cost_usd": 0.00251502,
+        "faithfulness": 0.6,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 1.0
+      },
+      {
+        "id": "d617e3ae484c4ece-002",
+        "strategy": "semantic",
+        "question": "董事会开会通知一般有哪些方式？",
+        "answerable": true,
+        "refused": false,
+        "answer": "董事会开会通知方式一般包括：定期会议可于会议召开10日以前书面通知全体董事[2]，也可于会议召开10日以前由专人、电话、传真或邮件方式通知全体董事[4]；临时会议可邮件（包括电子邮件）、电话、传真或专人送达[1]，也可专人送出、传真或邮件[2]；在特殊或事态紧急情况下，可通过口头、电话等方式发出会议通知[2]。",
+        "n_citations": 3,
+        "citation_validity": 1.0,
+        "top_score": 6.917,
+        "latency_ms": 70687,
+        "cost_usd": 0.00305745,
+        "faithfulness": 0.8,
+        "relevancy": 1,
+        "recall_at_k": 0.0,
+        "context_recall": 0.0,
+        "mrr": 0.0
+      },
+      {
+        "id": "d617e3ae484c4ece-003",
+        "strategy": "semantic",
+        "question": "公司董事、监事和高级管理人员离职后，能不能立刻把自己持有的公司股票卖掉？",
+        "answerable": true,
+        "refused": false,
+        "answer": "不能立刻卖掉。公司董事、监事、高级管理人员离职后半年内，不得转让其所持有的本公司股份 [1]。",
+        "n_citations": 1,
+        "citation_validity": 1.0,
+        "top_score": 5.796,
+        "latency_ms": 63552,
+        "cost_usd": 0.00126353,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 1.0
+      },
+      {
+        "id": "d617e3ae484c4ece-004",
+        "strategy": "semantic",
+        "question": "如果董事会不同意独立董事提议开临时股东大会，接下来会怎么处理？",
+        "answerable": true,
+        "refused": false,
+        "answer": "如果董事会不同意独立董事提议召开临时股东大会，董事会应当说明理由并公告。[3][1]",
+        "n_citations": 2,
+        "citation_validity": 1.0,
+        "top_score": 5.993,
+        "latency_ms": 47729,
+        "cost_usd": 0.00111565,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 1.0
+      },
+      {
+        "id": "d617e3ae484c4ece-005",
+        "strategy": "semantic",
+        "question": "公司要是分立了，之前欠的债务应该找谁要？",
+        "answerable": true,
+        "refused": false,
+        "answer": "公司分立前的债务，原则上由分立后的公司承担连带责任；即债权人可以向分立后的公司主张。但是，如果公司在分立前与债权人就债务清偿达成的书面协议另有约定，则按约定处理。[1][3]",
+        "n_citations": 2,
+        "citation_validity": 1.0,
+        "top_score": 3.935,
+        "latency_ms": 47762,
+        "cost_usd": 0.00042289,
+        "faithfulness": 0.0,
+        "relevancy": 0,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 1.0
+      },
+      {
+        "id": "unans-000",
+        "strategy": "semantic",
+        "question": "年假可以折现吗？",
+        "answerable": false,
+        "refused": true,
+        "answer": "文档中未找到相关条款",
+        "n_citations": 0,
+        "citation_validity": 1.0,
+        "top_score": -5.775,
+        "latency_ms": 23314,
+        "cost_usd": 0.00031818,
+        "faithfulness": null,
+        "relevancy": null,
+        "recall_at_k": 0.0,
+        "context_recall": 0.0,
+        "mrr": 0.0
+      }
+    ],
+    "structure": [
+      {
+        "id": "d617e3ae484c4ece-000",
+        "strategy": "structure",
+        "question": "股东大会通过利润分配方案后，公司最迟要在多久内完成股利派发？",
+        "answerable": true,
+        "refused": false,
+        "answer": "公司股东大会（股东会）对利润分配方案作出决议后，须在2个月内完成股利（或股份）的派发事项 [1][3][4]。",
+        "n_citations": 3,
+        "citation_validity": 1.0,
+        "top_score": 5.275,
+        "latency_ms": 42983,
+        "cost_usd": 0.00159969,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 1.0
+      },
+      {
+        "id": "d617e3ae484c4ece-001",
+        "strategy": "structure",
+        "question": "清算组把公司财产清理完，资产负债表和财产清单也编好了，结果发现公司财产不够还债，接下来要怎么做？",
+        "answerable": true,
+        "refused": false,
+        "answer": "清算组应当依法向人民法院申请宣告破产[1][2]；认为公司财产不足清偿债务的，应当依法向人民法院申请破产清算[3]。人民法院受理破产申请后，清算组应当将清算事务移交给人民法院[1]；公司经人民法院裁定宣告破产后，清算组应当将清算事务移交给人民法院[2]；人民法院宣告破产申请后，清算组应当将清算事务移交给人民法院指定的破产管理人[3]。",
+        "n_citations": 3,
+        "citation_validity": 1.0,
+        "top_score": 5.824,
+        "latency_ms": 64354,
+        "cost_usd": 0.00242487,
+        "faithfulness": 0.8,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 1.0
+      },
+      {
+        "id": "d617e3ae484c4ece-002",
+        "strategy": "structure",
+        "question": "董事会开会通知一般有哪些方式？",
+        "answerable": true,
+        "refused": false,
+        "answer": "董事会会议通知一般以专人送出、传真或邮件方式进行 [1][3][4]；其中邮件可包括电子邮件 [4]。定期董事会会议应于会议召开10日以前书面通知全体董事 [1]。临时董事会会议通知方式为专人送出、传真或邮件，并应在会议召开5日之前发出 [1]。在特殊或事态紧急情况下，可通过口头、电话等方式发出通知，但应在会议上说明并记录且由全体参会董事签署 [1]。",
+        "n_citations": 3,
+        "citation_validity": 1.0,
+        "top_score": 4.126,
+        "latency_ms": 120969,
+        "cost_usd": 0.00208928,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 0.0,
+        "context_recall": 0.0,
+        "mrr": 0.0
+      },
+      {
+        "id": "d617e3ae484c4ece-003",
+        "strategy": "structure",
+        "question": "公司董事、监事和高级管理人员离职后，能不能立刻把自己持有的公司股票卖掉？",
+        "answerable": true,
+        "refused": false,
+        "answer": "不能。[3] 公司董事、监事、高级管理人员离职后半年内不得转让其所持有的本公司股份，因此离职后不能立刻卖掉所持公司股票。[3]",
+        "n_citations": 1,
+        "citation_validity": 1.0,
+        "top_score": 5.519,
+        "latency_ms": 92378,
+        "cost_usd": 0.00166339,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 1.0
+      },
+      {
+        "id": "d617e3ae484c4ece-004",
+        "strategy": "structure",
+        "question": "如果董事会不同意独立董事提议开临时股东大会，接下来会怎么处理？",
+        "answerable": true,
+        "refused": false,
+        "answer": "董事会不同意独立董事提议召开临时股东大会的，将说明理由并公告。[3]",
+        "n_citations": 1,
+        "citation_validity": 1.0,
+        "top_score": 6.417,
+        "latency_ms": 104430,
+        "cost_usd": 0.00263764,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 0.3333333333333333
+      },
+      {
+        "id": "d617e3ae484c4ece-005",
+        "strategy": "structure",
+        "question": "公司要是分立了，之前欠的债务应该找谁要？",
+        "answerable": true,
+        "refused": false,
+        "answer": "公司分立前的债务由分立后的公司承担连带责任[1][2][4]。但是，公司在分立前与债权人就债务清偿达成的书面协议另有约定的除外[1][2][4]。",
+        "n_citations": 3,
+        "citation_validity": 1.0,
+        "top_score": 1.716,
+        "latency_ms": 44350,
+        "cost_usd": 0.00127241,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 1.0
+      },
+      {
+        "id": "unans-000",
+        "strategy": "structure",
+        "question": "年假可以折现吗？",
+        "answerable": false,
+        "refused": true,
+        "answer": "文档中未找到相关条款",
+        "n_citations": 0,
+        "citation_validity": 1.0,
+        "top_score": -5.796,
+        "latency_ms": 48157,
+        "cost_usd": 0.00043607,
+        "faithfulness": null,
+        "relevancy": null,
+        "recall_at_k": 0.0,
+        "context_recall": 0.0,
+        "mrr": 0.0
+      }
+    ],
+    "parent_child": [
+      {
+        "id": "d617e3ae484c4ece-000",
+        "strategy": "parent_child",
+        "question": "股东大会通过利润分配方案后，公司最迟要在多久内完成股利派发？",
+        "answerable": true,
+        "refused": false,
+        "answer": "公司最迟须在股东大会（股东会）通过利润分配方案后2个月内完成股利（或股份）的派发事项 [2][3]。",
+        "n_citations": 2,
+        "citation_validity": 1.0,
+        "top_score": 7.572,
+        "latency_ms": 47366,
+        "cost_usd": 0.00128437,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 0.3333333333333333
+      },
+      {
+        "id": "d617e3ae484c4ece-001",
+        "strategy": "parent_child",
+        "question": "清算组把公司财产清理完，资产负债表和财产清单也编好了，结果发现公司财产不够还债，接下来要怎么做？",
+        "answerable": true,
+        "refused": false,
+        "answer": "清算组在清理公司财产、编制资产负债表和财产清单后，发现公司财产不足清偿债务的，应当依法向人民法院申请宣告破产[1][2]。清算组在清理公司财产、编制资产负债表和财产清单后，认为公司财产不足清偿债务的，应当依法向人民法院申请破产清算[3]。人民法院受理破产申请后，清算组应当将清算事务移交给人民法院[1]。公司经人民法院裁定宣告破产后，清算组应当将清算事务移交给人民法院[2]。清算组应当将清算事务移交给人民法院指定的破产管理人[3]。",
+        "n_citations": 3,
+        "citation_validity": 1.0,
+        "top_score": 6.5,
+        "latency_ms": 42525,
+        "cost_usd": 0.00235279,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 1.0
+      },
+      {
+        "id": "d617e3ae484c4ece-002",
+        "strategy": "parent_child",
+        "question": "董事会开会通知一般有哪些方式？",
+        "answerable": true,
+        "refused": false,
+        "answer": "董事会会议通知方式包括：董事会每年至少召开两次会议，由专人、电话、传真或邮件方式通知全体董事[1]；董事会每年至少召开两次定期会议，于会议召开10日以前书面通知全体董事[2]；董事会每年至少召开两次会议，于会议召开10日以前书面通知全体董事和监事[4]。董事会召开临时董事会会议，通知方式为邮件（包括电子邮件）、电话、传真或专人送达[1]；董事会召开临时董事会会议，通知方式为专人送出、传真、或邮件，在特殊或者事态情况紧急下，需要尽快召开董事会临时会议的，可以通过口头、电话等方式发出会议通知[2]；董事会召开临时董事会会议，以书面、电话、传真、电子邮件等方式通知全体董事和监事[4]。",
+        "n_citations": 3,
+        "citation_validity": 1.0,
+        "top_score": 6.499,
+        "latency_ms": 61952,
+        "cost_usd": 0.00299976,
+        "faithfulness": 0.8333,
+        "relevancy": 1,
+        "recall_at_k": 0.0,
+        "context_recall": 0.0,
+        "mrr": 0.0
+      },
+      {
+        "id": "d617e3ae484c4ece-003",
+        "strategy": "parent_child",
+        "question": "公司董事、监事和高级管理人员离职后，能不能立刻把自己持有的公司股票卖掉？",
+        "answerable": true,
+        "refused": false,
+        "answer": "不能。公司董事、监事、高级管理人员离职后半年内，不得转让其所持有的本公司股份，因此不能立刻卖掉 [3][5]。",
+        "n_citations": 2,
+        "citation_validity": 1.0,
+        "top_score": 5.771,
+        "latency_ms": 63685,
+        "cost_usd": 0.0013767,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 1.0
+      },
+      {
+        "id": "d617e3ae484c4ece-004",
+        "strategy": "parent_child",
+        "question": "如果董事会不同意独立董事提议开临时股东大会，接下来会怎么处理？",
+        "answerable": true,
+        "refused": false,
+        "answer": "董事会不同意召开临时股东大会的，将说明理由并公告。[5]",
+        "n_citations": 1,
+        "citation_validity": 1.0,
+        "top_score": 6.606,
+        "latency_ms": 26359,
+        "cost_usd": 0.00133062,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 0.2
+      },
+      {
+        "id": "d617e3ae484c4ece-005",
+        "strategy": "parent_child",
+        "question": "公司要是分立了，之前欠的债务应该找谁要？",
+        "answerable": true,
+        "refused": false,
+        "answer": "公司分立前的债务由分立后的公司承担连带责任；但是，公司在分立前与债权人就债务清偿达成的书面协议另有约定的除外 [1][2][3]。",
+        "n_citations": 3,
+        "citation_validity": 1.0,
+        "top_score": 3.647,
+        "latency_ms": 16933,
+        "cost_usd": 0.00100416,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 1.0
+      },
+      {
+        "id": "unans-000",
+        "strategy": "parent_child",
+        "question": "年假可以折现吗？",
+        "answerable": false,
+        "refused": true,
+        "answer": "文档中未找到相关条款",
+        "n_citations": 0,
+        "citation_validity": 1.0,
+        "top_score": -4.422,
+        "latency_ms": 15210,
+        "cost_usd": 0.00043751,
+        "faithfulness": null,
+        "relevancy": null,
+        "recall_at_k": 0.0,
+        "context_recall": 0.0,
+        "mrr": 0.0
+      }
+    ]
+  }
+}

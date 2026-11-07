@@ -78,7 +78,15 @@ async def _eval(args: argparse.Namespace) -> None:
             s, dataset=args.dataset, strategies=args.strategies, limit=args.limit, concurrency=args.concurrency
         )
         print(json.dumps(report["summary"], ensure_ascii=False, indent=2))
-        print(f"\n报告：{report['report_path']}")
+        # write_reports 返回的是 markdown/html/json/snapshot/embedder，没有 report_path。
+        # 之前取 report["report_path"] 会让一次成功的评测以 KeyError + 退出码 1 收场，
+        # 恰好落在"报告已写好、CI 却判失败"这个最容易被当成真失败的位置。
+        emb = report.get("embedder") or {}
+        print(
+            f"\nembedder：{emb.get('name')} · dim {emb.get('dim')} · backend {emb.get('backend')}"
+            f" · degraded={emb.get('degraded')}"
+        )
+        print(f"报告：{report['markdown']}")
 
 
 async def _serve(args: argparse.Namespace) -> None:
