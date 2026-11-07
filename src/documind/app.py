@@ -56,13 +56,32 @@ class EvalIn(BaseModel):
 
 
 async def current_user(
-    x_user: str = Header(default="alice"), db: AsyncSession = Depends(get_db)
+    authorization: str = Header(default=""),
+    x_user: str = Header(default=""),
+    db: AsyncSession = Depends(get_db),
 ) -> User:
-    u = (await db.execute(sa.select(User).where(User.name == x_user))).scalar_one_or_none()
+    """身份只认签名令牌；dev 环境额外允许裸 X-User（不建号、角色以库为准）。
+
+    生产（env=prod）下裸头直接 401 —— 否则一条 curl 就能冒充 admin（见 docs/ARCH-REVIEW.md P0-01）。
+    """
+    from .auth import dev_header_allowed, verify
+
+    name, role_from_token = "", None
+    if authorization.lower().startswith("bearer "):
+        got = verify(authorization[7:].strip())
+        if got is None:
+            raise HTTPException(status_code=401, detail="令牌无效或已过期")
+        name, role_from_token = got
+    elif x_user and dev_header_allowed():
+        name = x_user
+    else:
+        raise HTTPException(status_code=401, detail="缺少身份令牌（Authorization: Bearer ...）")
+
+    u = (await db.execute(sa.select(User).where(User.name == name))).scalar_one_or_none()
     if u is None:
-        u = User(name=x_user, role="employee")
-        db.add(u)
-        await db.commit()
+        raise HTTPException(status_code=401, detail="用户不存在")
+    if role_from_token:
+        u.role = role_from_token  # 令牌里的角色是签发时的事实，库里同步
     return u
 
 
@@ -216,8 +235,27 @@ async def query_stream(
     return StreamingResponse(gen(), media_type="text/event-stream")
 
 
+class LoginIn(BaseModel):
+    name: str
+    role: str | None = None
+
+
+@app.post("/auth/login")
+async def login(payload: LoginIn, db: AsyncSession = Depends(get_db)) -> dict:
+    """签发签名令牌。dev 里按用户库发；生产应替换为 IdP 回调（见 auth.py 顶部注释）。"""
+    from .auth import sign
+
+    u = (await db.execute(sa.select(User).where(User.name == payload.name))).scalar_one_or_none()
+    if u is None:
+        raise HTTPException(status_code=401, detail="用户不存在")
+    if payload.role and payload.role != u.role:
+        raise HTTPException(status_code=403, detail="不能自行声明角色")
+    token = sign(u.name, u.role)
+    return {"token": token, "role": u.role, "expires_in_s": 12 * 3600}
+
+
 @app.get("/users")
-async def list_users(db: AsyncSession = Depends(get_db)) -> list[dict]:
+async def list_users(_: None = Depends(require_admin), db: AsyncSession = Depends(get_db)) -> list[dict]:
     rows = (await db.execute(sa.select(User))).scalars().all()
     return [{"name": u.name, "role": u.role} for u in rows]
 

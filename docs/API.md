@@ -1,6 +1,8 @@
 # DocuMind API 契约（前端据此开发，v0.1）
 
-所有请求默认带 `X-User: alice`（alice=employee / bob=finance / admin=admin）。
+身份：`POST /auth/login {"name":"alice"}` 拿 `token`，之后所有请求带 `Authorization: Bearer <token>`。
+生产（`DOCUMIND_ENV=prod`）下裸 `X-User` 一律 401；开发环境允许裸 `X-User` 但用户必须已存在（不自动建号）。
+演示用户：alice=employee / bob=finance / admin=admin。
 写操作（上传、建用户、跑评测）带 `X-Admin-Token: dev-admin-token`。
 后端默认 `http://127.0.0.1:8080`。
 

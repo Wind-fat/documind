@@ -37,8 +37,14 @@ def _schema():
 
 @pytest.fixture()
 async def db():
+    from documind.db import upsert_user
+
     async with get_session_factory()() as session:
         store.invalidate()
+        # 身份不再自动建号（见 P0-01）：测试里显式建好三种角色的用户
+        await upsert_user(session, "alice", "employee")
+        await upsert_user(session, "bob", "finance")
+        await upsert_user(session, "admin", "admin")
         yield session
         for table in reversed(Base.metadata.sorted_tables):
             await session.execute(sa.delete(table))

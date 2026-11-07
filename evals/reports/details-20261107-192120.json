@@ -1,0 +1,526 @@
+{
+  "summary": {
+    "structure": {
+      "n_cases": 15,
+      "n_answerable": 12,
+      "n_unanswerable": 3,
+      "recall_at_5": 0.7333,
+      "context_recall": 0.9167,
+      "mrr": 0.7361,
+      "faithfulness": 0.8583,
+      "answer_relevancy": 0.9167,
+      "citation_validity": 1.0,
+      "refusal_accuracy": 1.0,
+      "false_refusal_rate": 0.0,
+      "latency_p50_ms": 101061.0,
+      "latency_p95_ms": 141708.0,
+      "cost_per_query_usd": 0.001388,
+      "total_cost_usd": 0.0208,
+      "wall_s": 310.3
+    }
+  },
+  "calibration": {
+    "curve": [
+      {
+        "threshold": -14.0,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -13.5,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -13.0,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -12.5,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -12.0,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -11.5,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -11.0,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -10.5,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -10.0,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -9.93,
+        "refusal_accuracy": 0.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -9.5,
+        "refusal_accuracy": 0.3333,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -9.0,
+        "refusal_accuracy": 0.3333,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -8.5,
+        "refusal_accuracy": 0.3333,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -8.0,
+        "refusal_accuracy": 0.3333,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -7.5,
+        "refusal_accuracy": 0.3333,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -7.0,
+        "refusal_accuracy": 0.3333,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -6.5,
+        "refusal_accuracy": 0.3333,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -6.0,
+        "refusal_accuracy": 0.3333,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -5.8,
+        "refusal_accuracy": 0.3333,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -5.71,
+        "refusal_accuracy": 0.6667,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -5.5,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -5.0,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -4.5,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -4.0,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -3.5,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -3.0,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -2.5,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -2.0,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -1.5,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -1.0,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": -0.5,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": 0.0,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0
+      },
+      {
+        "threshold": 1.72,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0833
+      },
+      {
+        "threshold": 3.1,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.0833
+      },
+      {
+        "threshold": 3.25,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.1667
+      },
+      {
+        "threshold": 3.4,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.3333
+      },
+      {
+        "threshold": 4.13,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.4167
+      },
+      {
+        "threshold": 5.28,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.5
+      },
+      {
+        "threshold": 5.52,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.5833
+      },
+      {
+        "threshold": 5.78,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.5833
+      },
+      {
+        "threshold": 5.82,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.6667
+      },
+      {
+        "threshold": 6.12,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.75
+      },
+      {
+        "threshold": 6.42,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 0.9167
+      },
+      {
+        "threshold": 6.89,
+        "refusal_accuracy": 1.0,
+        "false_refusal": 1.0
+      }
+    ],
+    "recommended": {
+      "threshold": 3.1,
+      "refusal_accuracy": 1.0,
+      "false_refusal": 0.0833
+    },
+    "rule": "误拒率 ≤ 15% 的前提下，取拒答准确率最高的阈值（宁可多拒，不可错答）"
+  },
+  "details": {
+    "structure": [
+      {
+        "id": "d617e3ae484c4ece-000",
+        "strategy": "structure",
+        "question": "股东大会通过利润分配方案后，公司最迟要在多久内完成股利派发？",
+        "answerable": true,
+        "refused": false,
+        "answer": "股东大会对利润分配方案作出决议后，公司须在 2 个月内完成股利（或股份）的派发事项 [1][3][4]。",
+        "n_citations": 3,
+        "citation_validity": 1.0,
+        "top_score": 5.275,
+        "latency_ms": 110868,
+        "cost_usd": 0.0017067,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 1.0
+      },
+      {
+        "id": "d617e3ae484c4ece-001",
+        "strategy": "structure",
+        "question": "清算组把公司财产清理完，资产负债表和财产清单也编好了，结果发现公司财产不够还债，接下来要怎么做？",
+        "answerable": true,
+        "refused": false,
+        "answer": "清算组在清理公司财产、编制资产负债表和财产清单后，发现公司财产不足清偿债务的，应当依法向人民法院申请宣告破产[1][2]，或依法向人民法院申请破产清算[3]。人民法院受理破产申请后，清算组应当将清算事务移交给人民法院[1]；公司经人民法院裁定宣告破产后，清算组应当将清算事务移交给人民法院[2]；人民法院宣告手里破产申请后，清算组应当将清算事务移交给人民法院指定的破产管理人[3]。",
+        "n_citations": 3,
+        "citation_validity": 1.0,
+        "top_score": 5.824,
+        "latency_ms": 143923,
+        "cost_usd": 0.00266699,
+        "faithfulness": 0.8,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 1.0
+      },
+      {
+        "id": "d617e3ae484c4ece-002",
+        "strategy": "structure",
+        "question": "董事会开会通知一般有哪些方式？",
+        "answerable": true,
+        "refused": false,
+        "answer": "董事会会议通知的一般方式包括专人送出、传真、或邮件；其中邮件可包括电子邮件。[1][3][4] 在特殊或者事态情况紧急下，需要尽快召开董事会临时会议的，可以通过口头、电话等方式发出会议通知。[1]",
+        "n_citations": 3,
+        "citation_validity": 1.0,
+        "top_score": 4.126,
+        "latency_ms": 65555,
+        "cost_usd": 0.00159905,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 0.0,
+        "context_recall": 0.0,
+        "mrr": 0.0
+      },
+      {
+        "id": "d617e3ae484c4ece-003",
+        "strategy": "structure",
+        "question": "公司董事、监事和高级管理人员离职后，能不能立刻把自己持有的公司股票卖掉？",
+        "answerable": true,
+        "refused": false,
+        "answer": "不能立刻卖掉。公司董事、监事、高级管理人员离职后半年内，不得转让其所持有的本公司股份 [3]。",
+        "n_citations": 1,
+        "citation_validity": 1.0,
+        "top_score": 5.519,
+        "latency_ms": 85998,
+        "cost_usd": 0.00143582,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 1.0
+      },
+      {
+        "id": "d617e3ae484c4ece-004",
+        "strategy": "structure",
+        "question": "如果董事会不同意独立董事提议开临时股东大会，接下来会怎么处理？",
+        "answerable": true,
+        "refused": false,
+        "answer": "如果董事会不同意独立董事提议召开临时股东大会，董事会将说明理由并公告。[3]",
+        "n_citations": 1,
+        "citation_validity": 1.0,
+        "top_score": 6.417,
+        "latency_ms": 36166,
+        "cost_usd": 0.00110841,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 0.3333333333333333
+      },
+      {
+        "id": "d617e3ae484c4ece-005",
+        "strategy": "structure",
+        "question": "公司要是分立了，之前欠的债务应该找谁要？",
+        "answerable": true,
+        "refused": false,
+        "answer": "公司分立前的债务由分立后的公司承担连带责任，因此债权人可以要求分立后的公司承担清偿责任。[1][2][4] 如果公司在分立前与债权人就债务清偿达成的书面协议另有约定的，则按照该书面协议约定处理。[1][2][4]",
+        "n_citations": 3,
+        "citation_validity": 1.0,
+        "top_score": 1.716,
+        "latency_ms": 140418,
+        "cost_usd": 0.00131929,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 1.0
+      },
+      {
+        "id": "d617e3ae484c4ece-006",
+        "strategy": "structure",
+        "question": "副总经理是怎么聘任的？",
+        "answerable": true,
+        "refused": false,
+        "answer": "副总经理由董事会聘任或解聘[2][3][4]；有的章程规定由总经理提请董事会聘任或者解聘[1][2]；有的章程规定由总经理提名，经董事会聘任或解聘[4]；有的章程还规定副总经理由总经理提名，董事会提名委员会进行资格审查并提出意见，由董事会聘任或解聘[3]。",
+        "n_citations": 4,
+        "citation_validity": 1.0,
+        "top_score": 3.103,
+        "latency_ms": 141708,
+        "cost_usd": 0.00144756,
+        "faithfulness": 0.0,
+        "relevancy": 0,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 0.5
+      },
+      {
+        "id": "d617e3ae484c4ece-007",
+        "strategy": "structure",
+        "question": "董事辞职或者任期满了之后，还要继续对公司承担忠实义务多久？",
+        "answerable": true,
+        "refused": false,
+        "answer": "根据资料，董事辞职或者任期届满后继续承担忠实义务的期限存在不同规定[1][2][3][4]：《章程》规定董事辞任生效或者任期届满后，其对公司和股东承担的忠实义务在离职后2年内仍然有效[1]；《江苏苏豪时尚集团股份有限公司章程》规定董事辞职生效或者任期届满后承担忠实义务的具体期限为六个月[4]；《江苏苏豪时尚集团股份有限公司章程》和《宁波美诺华药业股份有限公司章程》规定董事辞职生效或者任期届满后，其对公司和股东承担的忠实义务在任期结束后并不当然解除，在本章程规定的合理期限内仍然有效[2][3]。",
+        "n_citations": 4,
+        "citation_validity": 1.0,
+        "top_score": 6.122,
+        "latency_ms": 121641,
+        "cost_usd": 0.0028206,
+        "faithfulness": 0.5,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 0.5
+      },
+      {
+        "id": "d617e3ae484c4ece-008",
+        "strategy": "structure",
+        "question": "公司如果要回购股份，一般可以通过什么方式？",
+        "answerable": true,
+        "refused": false,
+        "answer": "公司收购本公司股份，一般可以通过公开的集中交易方式，或者法律、行政法规和中国证监会认可的其他方式进行[1]；也可表述为通过公开的集中交易方式，或者法律法规和中国证监会认可的其他方式进行[2][3]。",
+        "n_citations": 3,
+        "citation_validity": 1.0,
+        "top_score": 3.396,
+        "latency_ms": 104545,
+        "cost_usd": 0.00120754,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 1.0
+      },
+      {
+        "id": "d617e3ae484c4ece-009",
+        "strategy": "structure",
+        "question": "公司年度股东大会一般要在什么时间召开？",
+        "answerable": true,
+        "refused": false,
+        "answer": "公司年度股东大会每年召开1次，应当于上一会计年度结束后的6个月内举行。[3]",
+        "n_citations": 1,
+        "citation_validity": 1.0,
+        "top_score": 5.78,
+        "latency_ms": 101061,
+        "cost_usd": 0.00123906,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 1.0
+      },
+      {
+        "id": "d617e3ae484c4ece-010",
+        "strategy": "structure",
+        "question": "董事辞职或者任期结束后，对公司的忠实义务会自动解除吗？",
+        "answerable": true,
+        "refused": false,
+        "answer": "董事辞职生效或者任期结束后，对公司和股东承担的忠实义务并不当然解除，在章程规定的合理期限内仍然有效[1][3]。有的章程规定，该忠实义务在离职后 2 年内仍然有效[2]；有的章程规定，董事辞职生效或者任期届满后承担忠实义务的具体期限为六个月[4]。",
+        "n_citations": 4,
+        "citation_validity": 1.0,
+        "top_score": 6.886,
+        "latency_ms": 97364,
+        "cost_usd": 0.00144037,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 1.0
+      },
+      {
+        "id": "d617e3ae484c4ece-011",
+        "strategy": "structure",
+        "question": "董事长没法主持股东大会的时候，该由谁来主持？",
+        "answerable": true,
+        "refused": false,
+        "answer": "董事长不能履行职务或不履行职务时，由副董事长主持；副董事长不能履行职务或者不履行职务时，由半数以上董事共同推举的一名董事主持[3]。",
+        "n_citations": 1,
+        "citation_validity": 1.0,
+        "top_score": 3.253,
+        "latency_ms": 109394,
+        "cost_usd": 0.00208265,
+        "faithfulness": 1.0,
+        "relevancy": 1,
+        "recall_at_k": 1.0,
+        "context_recall": 1.0,
+        "mrr": 0.5
+      },
+      {
+        "id": "unans-000",
+        "strategy": "structure",
+        "question": "年假可以折现吗？",
+        "answerable": false,
+        "refused": true,
+        "answer": "文档中未找到相关条款",
+        "n_citations": 0,
+        "citation_validity": 1.0,
+        "top_score": -5.796,
+        "latency_ms": 66718,
+        "cost_usd": 0.00042949,
+        "faithfulness": null,
+        "relevancy": null,
+        "recall_at_k": 0.0,
+        "context_recall": 0.0,
+        "mrr": 0.0
+      },
+      {
+        "id": "unans-001",
+        "strategy": "structure",
+        "question": "员工每年的带薪年假有几天？",
+        "answerable": false,
+        "refused": true,
+        "answer": "文档中未找到相关条款",
+        "n_citations": 0,
+        "citation_validity": 1.0,
+        "top_score": -5.705,
+        "latency_ms": 65973,
+        "cost_usd": 0.00031943,
+        "faithfulness": null,
+        "relevancy": null,
+        "recall_at_k": 0.0,
+        "context_recall": 0.0,
+        "mrr": 0.0
+      },
+      {
+        "id": "unans-002",
+        "strategy": "structure",
+        "question": "出差住宿费的报销标准是多少？",
+        "answerable": false,
+        "refused": true,
+        "answer": "文档中未找到相关条款。",
+        "n_citations": 0,
+        "citation_validity": 1.0,
+        "top_score": -9.93,
+        "latency_ms": 67216,
+        "cost_usd": 0.0,
+        "faithfulness": null,
+        "relevancy": null,
+        "recall_at_k": 0.0,
+        "context_recall": 0.0,
+        "mrr": 0.0
+      }
+    ]
+  }
+}

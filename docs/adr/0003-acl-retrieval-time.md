@@ -25,6 +25,18 @@
 - 检索为空与"检索到但无权"给出**同一条拒答理由**，不区分。
 - 测试 `test_retrieval_respects_document_acl` 断言：employee 角色下，财务文档的 chunk 既不在 hits 也不在 contexts。
 
+## 身份是 ACL 的前提（2026-11-07 复核后补）
+
+架构复核发现的 P0-01：检索期 ACL 做得对，但身份来自可伪造的 `X-User` 请求头，
+而且用户不存在时还会自动建号——一条 `curl -H 'X-User: admin'` 就能穿透整条 ACL。
+
+现在身份只认签名令牌 `name:role:exp:hmac(session_secret)`（`src/documind/auth.py`）：
+`POST /auth/login` 签发，`Authorization: Bearer` 携带；生产（`DOCUMIND_ENV=prod`）下裸 `X-User` 一律 401，
+dev 下允许裸头但**不建号、角色以库为准**。`GET /users` 需要 admin 令牌，避免先枚举角色再冒充。
+对应回归测试：`tests/test_auth.py`（伪造角色、过期、裸头、角色自提权各一条）。
+
+生产接真实 IdP 时只替换 `auth.issue()`，ACL 与检索层不用动。
+
 ## 放弃了什么
 
 - 行级/字段级 ACL（比如同一文档里"薪酬章节"更敏感）。当前粒度是文档级，P1 再做。
