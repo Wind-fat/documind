@@ -50,8 +50,27 @@
 
 ## GET /documents/{doc_id}/outline
 ```json
-{"doc_id":"a1b2","sections":[{"title":"第一章 总则","page":2}]}
+{"doc_id":"a1b2",
+ "sections":[
+   {"title":"第一章 总则","page":2,"level":1,"heading":"第一章 总则"},
+   {"title":"第一章 总则 > 第一节 目的","page":2,"level":2,"heading":"第一节 目的"}],
+ "tree":[{"title":"第一章 总则","page":2,"level":1,
+          "children":[{"title":"第一节 目的","page":2,"level":2,"children":[]}]}],
+ "outline_source":"parsed"}
 ```
+
+数据来源是**解析期落库**的 `documents.outline`（`ParsedDocument.outline()` 的 JSON），
+与入库时用的切块策略无关——用 `fixed`/`semantic` 入库的文档一样有章节树。
+早先这里是从 `strategy == "structure"` 的块按 `section_path` 反推的，非 structure 入库即返回空。
+
+| 字段 | 说明 |
+|---|---|
+| `sections` | 摊平后的章节列表，按文档顺序。`title` 是**章节路径**（`第一章 总则 > 第一节 目的`，与老响应同义），`heading` 是标题本身，`level` 1=章/节 |
+| `tree` | 同一份数据的层级形式（`children` 嵌套）。要父子关系时读这个，不要去切 `sections[].title` 的 ` > ` |
+| `outline_source` | `parsed` = 来自落库的章节树；`missing` = 迁移前的历史文档（该列后加、未回填），`sections`/`tree` 为空，需重新入库或跑 `scripts/backfill_outline.py`；`invalid` = 库里 JSON 损坏（服务端会打 warning） |
+
+`missing` 与 `"[]"` 是两件事：后者表示解析后确实没有章节标记（例如纯正文的 txt）。
+历史库补齐：`python scripts/backfill_outline.py`（干跑）→ `--apply`（按 `source_path` 重解析，不碰 chunks）。
 
 ## POST /documents  (multipart, 需 admin token)
 fields: `file`, `acl_roles`（JSON 字符串，如 `["all"]` 或 `["finance","admin"]`）, `title?`

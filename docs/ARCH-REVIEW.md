@@ -302,6 +302,8 @@ span 契约只被 documind 自己的 `chunking` 遵守（bidpilot 绕过）；AC
 | P1-04 索引缓存跨进程永不刷新 | **已修**：新增 `index_state.version`（写路径同事务 bump）+ 行数/`tokens` 指纹兜底；`IndexStore.get()` 每请求比对，不一致才重建；`/health` 暴露库内 `index_version` 与 `index_fingerprint` | db.py `IndexState`/`bump_index_version`、retrieve.py `read_index_fingerprint`/`IndexStore.get`、pipeline.py 入库、app.py `/health`、tests/test_index_version.py |
 | P1-01 `Retriever` 死代码 | **已删**：换成 `KeywordStore`/`VectorStore` 两个 Protocol（`runtime_checkable`），`BM25Index`/`VectorIndex` 实现之，`SearchIndex.bm25/vector` 只依赖端口；ADR-0002 补"切后端仍需改 4 处，清单见 §4" | index.py、docs/adr/0002、tests/test_ports.py |
 | P1-02 DoclingParser 假冒可切换 | **已标不可用**：类注释首行"未接线，禁止使用"，`Settings.parser` 只接受 `auto`，`DOCUMIND_PARSER=docling` 配置期直接报错；ADR-0001 写明"当前不可切换"与真 provenance 的接法 | parsing.py、config.py、docs/adr/0001、tests/test_parsing.py |
+| P1-08 `outline()` 双实现 | **已收口**：`documents.outline` 在解析期落库（`parsed.outline()` 的 JSON），`/documents/{id}/outline` 只读这一列，不再从 `strategy=="structure"` 的块反推；响应保留旧的 `sections[].title`（章节路径）语义并新增 `tree`（层级）与 `outline_source`；补 `outline()` 三条单测（层级/嵌套/空树）与非 structure 入库的 API 验收；历史库用 `scripts/backfill_outline.py` 按 `source_path` 回填（不碰 chunks） | db.py `Document.outline`、pipeline.py 入库（含 duplicate 分支回填）、app.py `get_outline`/`_flatten_outline`、scripts/backfill_outline.py、tests/test_parsing.py、tests/test_api.py、docs/API.md |
+| P1-09 evals 跨包调私有 `_page_texts` | **已公开**：查询提升为 `db.load_page_texts()`（pipeline 与 evals 共用），`pipeline._page_texts` 删除，runner 另删掉重复的 `_pages`；新增 AST 护栏测试禁止包内跨模块 import 下划线名 | db.py、pipeline.py、evals/runner.py、tests/test_import_boundaries.py |
 
 仍未动（不在本轮范围）：P1-05 已在此前提交闭环；其余 P1（bidpilot 侧）与 §7 的 B1–B6 保持原状。
 

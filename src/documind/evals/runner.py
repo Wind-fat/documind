@@ -12,11 +12,10 @@ import json
 import time
 
 import numpy as np
-import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import ROOT
-from ..db import EvalRun, Page, get_session_factory
+from ..db import EvalRun, get_session_factory, load_page_texts
 from ..embed import embedder_health
 from ..generate import answer_question
 from ..llm import LLMClient, get_llm
@@ -29,20 +28,10 @@ DATASETS = ROOT / "evals" / "datasets"
 REPORTS = ROOT / "evals" / "reports"
 
 
-async def _pages(session: AsyncSession, doc_ids: set[str]) -> dict[str, dict[int, str]]:
-    rows = (await session.execute(sa.select(Page.doc_id, Page.page_no, Page.text).where(Page.doc_id.in_(doc_ids)))).all()
-    out: dict[str, dict[int, str]] = {}
-    for doc_id, no, text in rows:
-        out.setdefault(doc_id, {})[no] = text
-    return out
-
-
 async def _one_case(case: dict, strategy: str, llm: LLMClient, selfcheck: bool, threshold: float) -> dict:
-    from ..pipeline import _page_texts
-
     async with get_session_factory()() as session:
         ret = await retrieve(session, case["question"], role="admin", strategy=strategy)
-        page_texts = await _page_texts(session, {h.doc_id for h in ret.hits}) if ret.hits else {}
+        page_texts = await load_page_texts(session, {h.doc_id for h in ret.hits}) if ret.hits else {}
         t0 = time.perf_counter()
         ans = await answer_question(
             case["question"], ret, llm, page_texts=page_texts, selfcheck=selfcheck, threshold=threshold

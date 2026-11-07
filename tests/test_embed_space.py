@@ -165,13 +165,15 @@ async def test_legacy_sqlite_database_gets_new_columns(tmp_path: Path):
         )
 
     added = await ensure_schema_compat(engine)
-    assert set(added) == {"chunks.embed_model", "chunks.embed_dim", "documents.embed_space"}
+    assert set(added) == {"chunks.embed_model", "chunks.embed_dim", "documents.embed_space", "documents.outline"}
 
     async with engine.connect() as conn:
         chunk = (await conn.exec_driver_sql("SELECT embed_model, embed_dim, text FROM chunks")).one()
         assert chunk[0] == "" and chunk[1] == 0 and chunk[2] == "老块"
-        doc = (await conn.exec_driver_sql("SELECT embed_space, title FROM documents")).one()
+        doc = (await conn.exec_driver_sql("SELECT embed_space, title, outline FROM documents")).one()
         assert doc[0] == "" and doc[1] == "老文档"
+        # 章节树列是后加的：历史行补成空串（= /outline 报 missing），不是 '[]'（= 确实没有章节）
+        assert doc[2] == ""
 
     # 幂等：第二次启动不重复补列
     assert await ensure_schema_compat(engine) == []

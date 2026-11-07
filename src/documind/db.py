@@ -59,6 +59,11 @@ class Document(Base):
     # 向量空间指纹 `model@dim`：这份文档的向量由哪个 embedder 产出。
     # 空串 = 迁移前的历史数据（无指纹），检索时会被 fail-fast 拦下（见 index_store）。
     embed_space: Mapped[str] = mapped_column(String(96), default="")
+    # 解析期落库的章节树（`ParsedDocument.outline()` 的 JSON 数组，P1-08）。
+    # `/documents/{id}/outline` 只读这一列，不再从 `strategy == "structure"` 的块反推——
+    # 否则用非 structure 策略入库的文档拿不到章节树，而"章节树"这个语义会有两份实现。
+    # `''` = 迁移前的历史文档（这一列是后加的，没有回填）；`'[]'` = 解析后确实没有章节标记。
+    outline: Mapped[str] = mapped_column(Text, default="[]")
     created_at: Mapped[dt.datetime] = mapped_column(default=_now)
 
     def roles(self) -> list[str]:
@@ -323,3 +328,20 @@ async def upsert_user(session: AsyncSession, name: str, role: str = "employee") 
 
 async def count_documents(session: AsyncSession) -> int:
     return (await session.execute(sa.select(func.count(Document.id)))).scalar_one()
+
+
+async def load_page_texts(session: AsyncSession, doc_ids: set[str] | str) -> dict[tuple[str, int], str]:
+    """一次取回相关文档的页文本，供引用定位（key = (doc_id, 页码)）。
+
+    公开函数（P1-09）：`evals` 与 `pipeline` 都走它。放在 db 层而不是 pipeline 里，
+    是因为它只查 `pages` 表、不含编排逻辑——评测链路要复用一段查询，不该去 import
+    编排模块的私有名。
+    """
+    if isinstance(doc_ids, str):
+        doc_ids = {doc_ids}
+    if not doc_ids:
+        return {}
+    rows = (
+        await session.execute(sa.select(Page.doc_id, Page.page_no, Page.text).where(Page.doc_id.in_(doc_ids)))
+    ).all()
+    return {(doc_id, no): text for doc_id, no, text in rows}

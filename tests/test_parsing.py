@@ -91,3 +91,50 @@ def test_parser_setting_rejects_unknown_values():
     with pytest.raises(ValidationError) as ei:
         Settings(parser="pypdf")
     assert "只支持 auto" in str(ei.value)
+
+
+def test_outline_is_a_hierarchy_not_a_flat_list(corpus_md: Path):
+    """P1-08：`outline()` 是章节树的**唯一**定义，必须自带层级。
+
+    老实现里 documind 的 `/outline` 另起一份（按 structure 块的 `section_path` 字符串去重），
+    只能拿到"第一章 总则 > 第一节 范围"这种拼接串，父子关系得靠再切一次字符串猜。
+    """
+    doc = parse_file(corpus_md)
+    tree = doc.outline()
+    # md 的 `#` 标题也是 level 1 节点（解析层一视同仁），所以第一个根是文档标题
+    assert [n["title"] for n in tree] == ["员工制度汇编", "第一章 总则", "第二章 休假", "第三章 财务"]
+    assert all(n["level"] == 1 for n in tree)
+    assert all(n["page"] >= 1 for n in tree)
+    # 条文（level 0）不是章节，不能进树
+    assert not any("第一条" in n["title"] for n in tree)
+
+
+def test_outline_nests_section_under_its_chapter(tmp_path: Path):
+    """节要挂在章下面（children），不是与章平级地排成一串。"""
+    p = tmp_path / "层级.md"
+    p.write_text(
+        "# 制度汇编\n\n"
+        "## 第一章 总则\n\n"
+        "## 第一节 目的\n\n"
+        "第一条 为规范公司管理，制定本制度。\n\n"
+        "## 第二节 适用范围\n\n"
+        "第二条 本制度适用于全体在职员工。\n\n"
+        "## 第二章 罚则\n\n"
+        "### 处分\n\n"
+        "第三条 违反本制度者，视情节给予处分。\n",
+        encoding="utf-8",
+    )
+    tree = parse_file(p).outline()
+    assert [n["title"] for n in tree] == ["制度汇编", "第一章 总则", "第二章 罚则"]
+    chapter1 = tree[1]
+    assert [c["title"] for c in chapter1["children"]] == ["第一节 目的", "第二节 适用范围"]
+    assert all(c["level"] == 2 for c in chapter1["children"])
+    # 没有第 X 章的 markdown 小标题也必须落进树（md 的 ### 也算层级）
+    assert [c["title"] for c in tree[2]["children"]] == ["处分"]
+
+
+def test_outline_of_flat_document_is_empty_list_not_none(tmp_path: Path):
+    """没有章节标记的文档 → `[]`（"解析过、确实没有章节"），而不是 None/异常。"""
+    p = tmp_path / "无章节.md"
+    p.write_text("这是一段没有章节标记的正文。\n\n第二段正文。\n", encoding="utf-8")
+    assert parse_file(p).outline() == []

@@ -352,7 +352,15 @@ export default function DocumentsPage() {
                   </div>
                 ) : null}
                 {selected && outline && outline.sections.length === 0 ? (
-                  <EmptyState icon="◌" title="该文档没有章节信息" desc="structure 切块未产出 section_path。" />
+                  <EmptyState
+                    icon="◌"
+                    title="该文档没有章节信息"
+                    desc={
+                      outline.outline_source === "missing"
+                        ? "该文档在章节树落库前入库（迁移前数据），重新入库后才会显示章节。"
+                        : "解析后没有识别到章节标记（第 X 章 / 第 X 节 / markdown 标题）。"
+                    }
+                  />
                 ) : null}
                 {selected && outline && outline.sections.length > 0 ? (
                   <div className="outline-tree">

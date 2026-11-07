@@ -1,0 +1,348 @@
+{
+  "base_url": "http://127.0.0.1:8912",
+  "questions": 8,
+  "answered": 6,
+  "refused": 2,
+  "citations": 19,
+  "span_ok": 19,
+  "span_hit_rate": 1.0,
+  "quote_verbatim": 19,
+  "quote_verbatim_rate": 1.0,
+  "citation_validity_mean": 0.875,
+  "rows": [
+    {
+      "question": "股东大会通过利润分配方案后，公司最迟要在多久内完成股利派发？",
+      "refused": false,
+      "reason": "",
+      "n_citations": 4,
+      "span_ok": 4,
+      "quote_verbatim": 4,
+      "citation_validity": 1.0,
+      "checks": [
+        {
+          "ref": 1,
+          "page_start": 48,
+          "char_start": 457,
+          "char_end": 497,
+          "slice_len": 40,
+          "span_ok": true,
+          "slice_head": "（五）公司股东大会对利润分配方案作出决议后，或公司董事会根据年度股东大会审议通过",
+          "quote_head": "（五）公司股东大会对利润分配方案作出决议后，或公司董事会根据年度股东大会审议通过",
+          "quote_verbatim": true,
+          "quote_prefix_ok": true,
+          "page_len": 659
+        },
+        {
+          "ref": 2,
+          "page_start": 42,
+          "char_start": 62,
+          "char_end": 102,
+          "slice_len": 40,
+          "span_ok": true,
+          "slice_head": "5、利润分配的期间间隔：在有可供分配的利润的前提下，原则上公司应至少每年进行一次",
+          "quote_head": "5、利润分配的期间间隔：在有可供分配的利润的前提下，原则上公司应至少每年进行一次",
+          "quote_verbatim": true,
+          "quote_prefix_ok": true,
+          "page_len": 768
+        },
+        {
+          "ref": 3,
+          "page_start": 40,
+          "char_start": 260,
+          "char_end": 300,
+          "slice_len": 40,
+          "span_ok": true,
+          "slice_head": "第一百五十七条 股东会对利润分配方案作出决议后，或公司董事会根据年度股东会审议通",
+          "quote_head": "第一百五十七条 股东会对利润分配方案作出决议后，或公司董事会根据年度股东会审议通",
+          "quote_verbatim": true,
+          "quote_prefix_ok": true,
+          "page_len": 682
+        },
+        {
+          "ref": 4,
+          "page_start": 45,
+          "char_start": 472,
+          "char_end": 512,
+          "slice_len": 40,
+          "span_ok": true,
+          "slice_head": "第一百七十一条 公司股东会对利润分配方案作出决议后，或者公司董事会根据年度股东会",
+          "quote_head": "第一百七十一条 公司股东会对利润分配方案作出决议后，或者公司董事会根据年度股东会",
+          "quote_verbatim": true,
+          "quote_prefix_ok": true,
+          "page_len": 648
+        }
+      ]
+    },
+    {
+      "question": "清算组把公司财产清理完，资产负债表和财产清单也编好了，结果发现公司财产不够还债，接下来要怎么做？",
+      "refused": false,
+      "reason": "",
+      "n_citations": 3,
+      "span_ok": 3,
+      "quote_verbatim": 3,
+      "citation_validity": 1.0,
+      "checks": [
+        {
+          "ref": 1,
+          "page_start": 55,
+          "char_start": 246,
+          "char_end": 286,
+          "slice_len": 40,
+          "span_ok": true,
+          "slice_head": "清算组在清理公司财产、编制资产负债表和财产清单后，发现公司财产不足清偿债务的，应",
+          "quote_head": "清算组在清理公司财产、编制资产负债表和财产清单后，发现公司财产不足清偿债务的，应",
+          "quote_verbatim": true,
+          "quote_prefix_ok": true,
+          "page_len": 642
+        },
+        {
+          "ref": 2,
+          "page_start": 57,
+          "char_start": 7,
+          "char_end": 47,
+          "slice_len": 40,
+          "span_ok": true,
+          "slice_head": "清算组在清理公司财产、编制资产负债表和财产清单后，发现公司财产不足清偿债务的，应",
+          "quote_head": "清算组在清理公司财产、编制资产负债表和财产清单后，发现公司财产不足清偿债务的，应",
+          "quote_verbatim": true,
+          "quote_prefix_ok": true,
+          "page_len": 290
+        },
+        {
+          "ref": 3,
+          "page_start": 48,
+          "char_start": 588,
+          "char_end": 628,
+          "slice_len": 40,
+          "span_ok": true,
+          "slice_head": "清算组在清理公司财产、编制资产负债表和财产清单后，认为公司财产不足清偿债务的，应",
+          "quote_head": "清算组在清理公司财产、编制资产负债表和财产清单后，认为公司财产不足清偿债务的，应",
+          "quote_verbatim": true,
+          "quote_prefix_ok": true,
+          "page_len": 683
+        }
+      ]
+    },
+    {
+      "question": "董事会开会通知一般有哪些方式？",
+      "refused": true,
+      "reason": "自检重试输出无效，按拒答处理",
+      "n_citations": 3,
+      "span_ok": 3,
+      "quote_verbatim": 3,
+      "citation_validity": 1.0,
+      "checks": [
+        {
+          "ref": 3,
+          "page_start": 51,
+          "char_start": 275,
+          "char_end": 305,
+          "slice_len": 30,
+          "span_ok": true,
+          "slice_head": "公司召开董事会的会议通知，以专人送出、传真、或邮件方式进行。",
+          "quote_head": "公司召开董事会的会议通知，以专人送出、传真、或邮件方式进行。",
+          "quote_verbatim": true,
+          "quote_prefix_ok": true,
+          "page_len": 646
+        },
+        {
+          "ref": 4,
+          "page_start": 44,
+          "char_start": 509,
+          "char_end": 549,
+          "slice_len": 40,
+          "span_ok": true,
+          "slice_head": "公司召开董事会的会议通知，以邮件（包括电子邮件）、专人送达书面文件或传真送出方式",
+          "quote_head": "公司召开董事会的会议通知，以邮件（包括电子邮件）、专人送达书面文件或传真送出方式",
+          "quote_verbatim": true,
+          "quote_prefix_ok": true,
+          "page_len": 616
+        },
+        {
+          "ref": 1,
+          "page_start": 35,
+          "char_start": 552,
+          "char_end": 592,
+          "slice_len": 40,
+          "span_ok": true,
+          "slice_head": "董事会召开临时董事会会议的通知方式为：专人送出、传真、或邮件；通知时限为：会议召",
+          "quote_head": "董事会召开临时董事会会议的通知方式为：专人送出、传真、或邮件；通知时限为：会议召",
+          "quote_verbatim": true,
+          "quote_prefix_ok": true,
+          "page_len": 720
+        }
+      ]
+    },
+    {
+      "question": "公司董事、监事和高级管理人员离职后，能不能立刻把自己持有的公司股票卖掉？",
+      "refused": false,
+      "reason": "",
+      "n_citations": 1,
+      "span_ok": 1,
+      "quote_verbatim": 1,
+      "citation_validity": 1.0,
+      "checks": [
+        {
+          "ref": 3,
+          "page_start": 11,
+          "char_start": 359,
+          "char_end": 399,
+          "slice_len": 40,
+          "span_ok": true,
+          "slice_head": "公司董事、监事、高级管理人员应当向公司申报所持有的本公司的股份及其变动情况，在任",
+          "quote_head": "公司董事、监事、高级管理人员应当向公司申报所持有的本公司的股份及其变动情况，在任",
+          "quote_verbatim": true,
+          "quote_prefix_ok": true,
+          "page_len": 726
+        }
+      ]
+    },
+    {
+      "question": "如果董事会不同意独立董事提议开临时股东大会，接下来会怎么处理？",
+      "refused": false,
+      "reason": "",
+      "n_citations": 1,
+      "span_ok": 1,
+      "quote_verbatim": 1,
+      "citation_validity": 1.0,
+      "checks": [
+        {
+          "ref": 3,
+          "page_start": 19,
+          "char_start": 160,
+          "char_end": 185,
+          "slice_len": 25,
+          "span_ok": true,
+          "slice_head": "董事会不同意召开临时股东大会的，将说明理由并公告。",
+          "quote_head": "董事会不同意召开临时股东大会的，将说明理由并公告。",
+          "quote_verbatim": true,
+          "quote_prefix_ok": true,
+          "page_len": 729
+        }
+      ]
+    },
+    {
+      "question": "公司要是分立了，之前欠的债务应该找谁要？",
+      "refused": true,
+      "reason": "最高重排分 1.72 低于拒答阈值 2.94",
+      "n_citations": 0,
+      "span_ok": 0,
+      "quote_verbatim": 0,
+      "citation_validity": 0.0,
+      "checks": []
+    },
+    {
+      "question": "副总经理是怎么聘任的？",
+      "refused": false,
+      "reason": "",
+      "n_citations": 3,
+      "span_ok": 3,
+      "quote_verbatim": 3,
+      "citation_validity": 1.0,
+      "checks": [
+        {
+          "ref": 1,
+          "page_start": 43,
+          "char_start": 344,
+          "char_end": 384,
+          "slice_len": 40,
+          "span_ok": true,
+          "slice_head": "副总经理每届任期 3 年，由总经理提请董事会聘任或者解聘。公司副总经理协助总经理",
+          "quote_head": "副总经理每届任期 3 年，由总经理提请董事会聘任或者解聘。公司副总经理协助总经理",
+          "quote_verbatim": true,
+          "quote_prefix_ok": true,
+          "page_len": 654
+        },
+        {
+          "ref": 4,
+          "page_start": 38,
+          "char_start": 421,
+          "char_end": 459,
+          "slice_len": 38,
+          "span_ok": true,
+          "slice_head": "副总经理由总经理提名，经董事会聘任或解聘，协助总经理开展工作，对总经理负责。",
+          "quote_head": "副总经理由总经理提名，经董事会聘任或解聘，协助总经理开展工作，对总经理负责。",
+          "quote_verbatim": true,
+          "quote_prefix_ok": true,
+          "page_len": 630
+        },
+        {
+          "ref": 3,
+          "page_start": 42,
+          "char_start": 326,
+          "char_end": 366,
+          "slice_len": 40,
+          "span_ok": true,
+          "slice_head": "副总经理由总经理提名，董事会提名委员会进行资格审查并提出意见，由董事会聘任或解聘",
+          "quote_head": "副总经理由总经理提名，董事会提名委员会进行资格审查并提出意见，由董事会聘任或解聘",
+          "quote_verbatim": true,
+          "quote_prefix_ok": true,
+          "page_len": 482
+        }
+      ]
+    },
+    {
+      "question": "董事辞职或者任期满了之后，还要继续对公司承担忠实义务多久？",
+      "refused": false,
+      "reason": "",
+      "n_citations": 4,
+      "span_ok": 4,
+      "quote_verbatim": 4,
+      "citation_validity": 1.0,
+      "checks": [
+        {
+          "ref": 1,
+          "page_start": 31,
+          "char_start": 220,
+          "char_end": 260,
+          "slice_len": 40,
+          "span_ok": true,
+          "slice_head": "董事辞任生效或者任期届满，应向董事会办妥所有移交手续，其对公司和股东承担的忠实义",
+          "quote_head": "董事辞任生效或者任期届满，应向董事会办妥所有移交手续，其对公司和股东承担的忠实义",
+          "quote_verbatim": true,
+          "quote_prefix_ok": true,
+          "page_len": 780
+        },
+        {
+          "ref": 2,
+          "page_start": 34,
+          "char_start": 479,
+          "char_end": 519,
+          "slice_len": 40,
+          "span_ok": true,
+          "slice_head": "董事辞职生效或者任期届满，应向董事会办妥所有移交手续，其对公司和股东承担的忠实义",
+          "quote_head": "董事辞职生效或者任期届满，应向董事会办妥所有移交手续，其对公司和股东承担的忠实义",
+          "quote_verbatim": true,
+          "quote_prefix_ok": true,
+          "page_len": 585
+        },
+        {
+          "ref": 3,
+          "page_start": 28,
+          "char_start": 571,
+          "char_end": 611,
+          "slice_len": 40,
+          "span_ok": true,
+          "slice_head": "董事辞职生效或者任期届满，应向董事会办妥所有移交手续，其对公司和股东承担的忠实义",
+          "quote_head": "董事辞职生效或者任期届满，应向董事会办妥所有移交手续，其对公司和股东承担的忠实义",
+          "quote_verbatim": true,
+          "quote_prefix_ok": true,
+          "page_len": 675
+        },
+        {
+          "ref": 4,
+          "page_start": 34,
+          "char_start": 349,
+          "char_end": 378,
+          "slice_len": 29,
+          "span_ok": true,
+          "slice_head": "董事辞职生效或者任期届满后承担忠实义务的具体期限为六个月。",
+          "quote_head": "董事辞职生效或者任期届满后承担忠实义务的具体期限为六个月。",
+          "quote_verbatim": true,
+          "quote_prefix_ok": true,
+          "page_len": 585
+        }
+      ]
+    }
+  ]
+}

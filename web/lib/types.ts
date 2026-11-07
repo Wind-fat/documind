@@ -105,13 +105,29 @@ export interface PageText {
 }
 
 export interface OutlineSection {
+  /** 章节路径（`第一章 总则 > 第一节 目的`），与老接口同义 */
   title: string;
   page: number;
+  /** 1=章/节；解析层的层级 */
+  level: number;
+  /** 标题本身（不含父路径） */
+  heading: string;
+}
+
+export interface OutlineNode {
+  title: string;
+  page: number;
+  level: number;
+  children: OutlineNode[];
 }
 
 export interface Outline {
   doc_id: string;
   sections: OutlineSection[];
+  /** 层级形式；要父子关系读这个，不要去切 sections[].title 的 ` > ` */
+  tree: OutlineNode[];
+  /** parsed=解析期落库的章节树；missing=迁移前历史文档；invalid=库里 JSON 损坏 */
+  outline_source: "parsed" | "missing" | "invalid";
 }
 
 export interface UploadResult {

@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
-from .db import Chunk, Document, EvalRun, Page, User, get_db, get_session_factory, init_db
+from .db import Document, EvalRun, Page, User, get_db, get_session_factory, init_db
 from .embed import EmbeddingSpaceMismatch, embedder_health
 from .parsing import EmptyDocumentError
 from .pipeline import ask, ingest_document, stream_answer
@@ -237,23 +237,62 @@ async def get_page(
     return {"doc_id": doc_id, "page": page_no, "text": p.text}
 
 
+def _flatten_outline(nodes: list[dict], parent_path: str = "") -> list[dict]:
+    """把落库的章节树摊平成 `章节路径 → 页码` 列表（保持 `/outline` 既有字段语义）。
+
+    老响应里的 `sections[].title` 就是 `chunk.section_path`（`第一章 总则 > 第一节 ...`
+    这种用 ` > ` 拼起来的字符串），前端拿它当章节路径显示。这里仍产出同样的字符串，
+    只是数据来源换成解析期落库的章节树，而不是按 structure 块的 section_path 去重。
+    """
+    flat: list[dict] = []
+    for node in nodes:
+        label = str(node.get("title") or "").strip()
+        if not label:
+            continue
+        path = f"{parent_path} > {label}" if parent_path else label
+        flat.append(
+            {
+                "title": path,  # 兼容旧字段：章节路径
+                "page": int(node.get("page") or 1),
+                "level": int(node.get("level") or 1),
+                "heading": label,  # 标题本身（不含父路径）
+            }
+        )
+        flat.extend(_flatten_outline(node.get("children") or [], path))
+    return flat
+
+
 @app.get("/documents/{doc_id}/outline")
 async def get_outline(
     doc_id: str, user: User = Depends(current_user), db: AsyncSession = Depends(get_db)
 ) -> dict:
-    await _visible_doc(db, doc_id, user)
-    rows = (
-        (
-            await db.execute(
-                sa.select(Chunk.section_path, sa.func.min(Chunk.page_start))
-                .where(Chunk.doc_id == doc_id, Chunk.strategy == "structure")
-                .group_by(Chunk.section_path)
-                .order_by(sa.func.min(Chunk.page_start))
-            )
-        )
-        .all()
-    )
-    return {"doc_id": doc_id, "sections": [{"title": s, "page": p} for s, p in rows if s]}
+    """章节树只读 `documents.outline`（解析期由 `ParsedDocument.outline()` 落库，P1-08）。
+
+    这里**不再**从 `strategy == "structure"` 的块反推：那样一份用 fixed/semantic 策略入库的
+    文档会返回空章节树，而它明明有章节——数据库里已经存了权威版本，没有理由再猜一次。
+    """
+    doc = await _visible_doc(db, doc_id, user)
+    raw = (doc.outline or "").strip()
+    tree: list[dict] = []
+    if not raw:
+        # 这一列是后加的：迁移前的历史文档没有章节树落库。不退回"从块反推"（那会让
+        # 两份定义重新长出来），而是显式告诉调用方需要重新入库。
+        source = "missing"
+    else:
+        try:
+            loaded = json.loads(raw)
+        except json.JSONDecodeError:
+            logging.getLogger(__name__).warning("documents.outline 不是合法 JSON: doc_id=%s", doc_id)
+            source = "invalid"
+        else:
+            tree = loaded if isinstance(loaded, list) else []
+            source = "parsed"
+    return {
+        "doc_id": doc_id,
+        "sections": _flatten_outline(tree),
+        "tree": tree,
+        "outline_source": source,
+    }
 
 
 @app.post("/query")

@@ -147,3 +147,91 @@ async def test_stream_events(client, loaded, monkeypatch):
     assert "event: evidence" in text and "event: answer" in text
     # 向后兼容：evidence 仍是 Hit 数组，answer 仍是完整 Answer
     assert '"chunk_id"' in text and '"refused"' in text
+
+
+async def test_outline_is_non_empty_for_non_structure_ingest(client, db, corpus_md: Path):
+    """P1-08 验收：只用 fixed 策略入库（库里根本没有 structure 块），章节树不能为空。
+
+    改前这里必然返回 `sections: []`——旧实现从 `chunk.strategy == "structure"` 反推。
+    """
+    import sqlalchemy as sa
+
+    from documind.db import Chunk
+
+    res = await ingest_document(db, corpus_md, acl_roles=["all"], title="非结构入库", strategies=("fixed",))
+    doc_id = res["document_id"]
+    assert "structure" not in res["strategy_stats"]
+    n_structure = (
+        await db.execute(
+            sa.select(sa.func.count(Chunk.id)).where(Chunk.doc_id == doc_id, Chunk.strategy == "structure")
+        )
+    ).scalar_one()
+    assert n_structure == 0
+
+    r = await client.get(f"/documents/{doc_id}/outline", headers={"X-User": "alice"})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["outline_source"] == "parsed"
+    assert [s["title"] for s in body["sections"]] == [
+        "员工制度汇编",
+        "第一章 总则",
+        "第二章 休假",
+        "第三章 财务",
+    ]
+    assert all(s["page"] >= 1 for s in body["sections"])
+    # 层级也随响应给出（老响应只有 `章节路径 → 页码` 的平铺串）
+    assert body["tree"][1]["level"] == 1 and body["tree"][1]["page"] >= 1
+
+
+async def test_outline_reports_missing_for_legacy_rows(client, db):
+    """历史文档（outline 列为后加的，值为空串）显式标 missing，不偷偷退回"从块反推"。"""
+    from documind.db import Document
+
+    d = Document(title="迁移前的老文档", filename="old.pdf", sha256="0" * 64, outline="")
+    db.add(d)
+    await db.commit()
+
+    r = await client.get(f"/documents/{d.id}/outline", headers={"X-User": "alice"})
+    assert r.status_code == 200, r.text
+    assert r.json() == {"doc_id": d.id, "sections": [], "tree": [], "outline_source": "missing"}
+
+
+async def test_reuploading_a_legacy_document_backfills_its_outline(client, db, corpus_md: Path):
+    """迁移前入库的文档（outline 为空串）重新上传一次就能拿到章节树，且不重复建块。
+
+    这是 P1-08 留的升级路径：`documents.outline` 是后加的列，历史行无从回填；
+    重新上传不会重算向量（sha256 相同 → 走 duplicate 分支），只补这一列。
+    """
+    import sqlalchemy as sa
+
+    from documind.db import Chunk, Document
+
+    first = await ingest_document(db, corpus_md, acl_roles=["all"], title="老文档")
+    doc = (
+        await db.execute(sa.select(Document).where(Document.id == first["document_id"]))
+    ).scalar_one()
+    n_chunks = (
+        await db.execute(sa.select(sa.func.count(Chunk.id)).where(Chunk.doc_id == doc.id))
+    ).scalar_one()
+    # 模拟"迁移前入库的行走势"：列存在但值是空串
+    doc.outline = ""
+    await db.commit()
+
+    r = await client.get(f"/documents/{doc.id}/outline", headers={"X-User": "alice"})
+    assert r.json()["outline_source"] == "missing" and r.json()["sections"] == []
+
+    again = await ingest_document(db, corpus_md, acl_roles=["all"], title="老文档")
+    assert again["duplicate"] is True and again["outline_backfilled"] is True
+    # 块没有重建（重复入库不重新切块/向量化）
+    assert (
+        await db.execute(sa.select(sa.func.count(Chunk.id)).where(Chunk.doc_id == doc.id))
+    ).scalar_one() == n_chunks
+
+    r2 = await client.get(f"/documents/{doc.id}/outline", headers={"X-User": "alice"})
+    body = r2.json()
+    assert body["outline_source"] == "parsed"
+    assert [s["title"] for s in body["sections"]][:2] == ["员工制度汇编", "第一章 总则"]
+
+    # 再传一次：已经有章节树，不重复补
+    third = await ingest_document(db, corpus_md, acl_roles=["all"], title="老文档")
+    assert third["duplicate"] is True and third["outline_backfilled"] is False

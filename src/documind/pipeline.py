@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .chunking import STRATEGIES, chunk_document
 from .config import get_settings
 from .db import Chunk as ChunkRow
-from .db import Conversation, Document, Message, Page, bump_index_version
+from .db import Conversation, Document, Message, Page, bump_index_version, load_page_texts
 from .embed import get_embedder
 from .generate import Answer, AnswerStream, answer_question
 from .llm import get_llm
@@ -52,7 +52,20 @@ async def ingest_document(
         await session.execute(sa.select(Document).where(Document.sha256 == digest, Document.title == (title or parsed.title)))
     ).scalar_one_or_none()
     if dup is not None:
-        return {"document_id": dup.id, "duplicate": True, "strategy_stats": {}}
+        # 同一份文件不重复建块。但 `documents.outline` 是后加的列（P1-08）：迁移前的行
+        # 没有章节树，`/outline` 只能报 missing。重新上传一次就把章节树补上——不需要
+        # 重算向量，也不需要重建块（哈希与标题都没变，块内容必然相同）。
+        backfilled = False
+        if not (dup.outline or "").strip():
+            dup.outline = json.dumps(parsed.outline(), ensure_ascii=False)
+            await session.commit()
+            backfilled = True
+        return {
+            "document_id": dup.id,
+            "duplicate": True,
+            "strategy_stats": {},
+            "outline_backfilled": backfilled,
+        }
 
     doc = Document(
         title=title or parsed.title,
@@ -63,6 +76,10 @@ async def ingest_document(
         source_path=str(p.resolve()),
         # 向量空间指纹：这份文档的向量由哪个 embedder / 多少维产出（P0-02）
         embed_space=embedder.space,
+        # 章节树在解析期就定型落库（P1-08）：这是 `ParsedDocument.outline()` 的唯一出口，
+        # /documents/{id}/outline 之后只读这一列。与用哪种切块策略入库**无关**——同一个
+        # ParsedDocument 产出的章节树不该因为 strategy=fixed 就消失。
+        outline=json.dumps(parsed.outline(), ensure_ascii=False),
     )
     session.add(doc)
     await session.flush()
@@ -157,16 +174,6 @@ async def _history(session: AsyncSession, conversation_id: str | None) -> list[d
     return [{"role": r.role, "content": r.content} for r in rows]
 
 
-async def _page_texts(session: AsyncSession, doc_ids: set[str] | str) -> dict[tuple[str, int], str]:
-    """一次取回相关文档的页文本，供引用定位（key = (doc_id, 页码)）。"""
-    if isinstance(doc_ids, str):
-        doc_ids = {doc_ids}
-    rows = (
-        await session.execute(sa.select(Page.doc_id, Page.page_no, Page.text).where(Page.doc_id.in_(doc_ids)))
-    ).all()
-    return {(doc_id, no): text for doc_id, no, text in rows}
-
-
 async def _prepare(
     session: AsyncSession,
     question: str,
@@ -189,7 +196,7 @@ async def _prepare(
     retrieval: RetrievalResult = await retrieve(session, rewritten, role=role, strategy=strategy, top_k=top_k)
     page_texts: dict[tuple[str, int], str] = {}
     if retrieval.contexts:
-        page_texts = await _page_texts(session, {h.doc_id for h in retrieval.contexts})
+        page_texts = await load_page_texts(session, {h.doc_id for h in retrieval.contexts})
     return rewritten, retrieval, page_texts, history
 
 

@@ -153,7 +153,45 @@ gold 句常常在第 256 字之后。`focus` 先按句切、取与问题字面�
 - **长度分桶组批的实际收益是 0**：本语料每个块都超过截断上限，长度全一样。
   保留它是为了短块语料（表格类、FAQ）不浪费 padding，但这台机器上没测出收益。
 
-## 7. 复现
+## 7. 引用定位（span 回查）：改前 / 改后
+
+重排参数改了候选数与窗口，最先该怀疑的不是召回而是**引用还能不能定位到原文**。
+`scripts/verify_citation_spans.py` 用真语料（3 份真章程，`qa_default.jsonl` 前 8 道可答题）
+跑 `/query`，再拿 `citations[]` 的 `page_start/char_start/page_end/char_end` 去 pages 表原文里
+切一刀，要求 `page[char_start:char_end]` 严格是 `quote` 的前缀（`locate_quote` 找的是前 40 字）。
+
+两次跑的是**同一份代码**，只有三个旋钮不同（改前那组就是 `ea63b8a` 之前的默认值）：
+
+```bash
+# 改后（默认）：10 × focus@256
+PYTHONPATH=src ./.venv/Scripts/python.exe -m uvicorn documind.app:app --port 8911
+./.venv/Scripts/python.exe scripts/verify_citation_spans.py --base-url http://127.0.0.1:8911 \
+    --limit 8 --out evals/reports/span_check_after_focus256.json
+
+# 改前（对照）：30 × head@512
+DOCUMIND_RERANK_CANDIDATES=30 DOCUMIND_RERANK_MAX_TOKENS=512 DOCUMIND_RERANK_TRUNCATE=head \
+  PYTHONPATH=src ./.venv/Scripts/python.exe -m uvicorn documind.app:app --port 8912
+./.venv/Scripts/python.exe scripts/verify_citation_spans.py --base-url http://127.0.0.1:8912 \
+    --limit 8 --out evals/reports/span_check_before_head512.json
+```
+
+| 指标 | 改前（30 × head@512） | 改后（10 × focus@256） |
+|---|---|---|
+| 题数 / 实际作答 | 8 / 6 | 8 / 8 |
+| 被拒 | 2（1 题 `top_score 1.72 < 阈值 2.94`；1 题自检重试输出无效） | 0 |
+| citations 总数 | 19 | 22 |
+| span 回查命中（`page[cs:ce]` 是 quote 前缀） | **19/19 = 100%** | **22/22 = 100%** |
+| quote 整段在原文逐字出现 | 19/19 = 100% | 22/22 = 100% |
+| `citation_validity` 均值（eval 口径） | 0.875 | **1.000** |
+| 单题端到端（含生成 + 自检） | ~100 s | ~48 s |
+
+结论与边界：**没有观察到引用定位变差**；改后反而多答对 2 题（改前那 2 题一题被分数阈值拦住、
+一题是自检重试失败），`citation_validity` 从 0.875 升到 1.0。
+机制上也解释得通：截断窗口只喂给 cross-encoder 打分，模型看到的仍是**整块文本**，
+span 由 `locate_quote` 在 pages 原文里现查——所以窗口大小改的是**排名**，不是坐标。
+样本只有 8 题 / 41 条引用，足够的说法是"没观察到变差"，不是"证明等价"。
+
+## 8. 复现
 
 ```bash
 # 1) 延迟（分段计时 + 配置前沿）
@@ -169,4 +207,7 @@ gold 句常常在第 256 字之后。`focus` 先按句切、取与问题字面�
 # 4) 想回到改前行为（对照用）：全量 30 条 × 512 token
 DOCUMIND_RERANK_CANDIDATES=30 DOCUMIND_RERANK_MAX_TOKENS=512 \
 DOCUMIND_RERANK_TRUNCATE=head ./.venv/Scripts/python.exe scripts/eval_retrieval.py
+
+# 5) 引用 span 回查（§7）
+./.venv/Scripts/python.exe scripts/verify_citation_spans.py --base-url http://127.0.0.1:8911 --limit 8
 ```
