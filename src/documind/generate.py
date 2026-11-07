@@ -200,14 +200,24 @@ async def answer_question(
         )
         try:
             verdict = parse_json(chk.text)
-        except Exception:
-            verdict = {"supported": True, "unsupported_claims": []}
+            if not isinstance(verdict, dict):
+                raise TypeError(f"自检输出不是 JSON 对象：{type(verdict).__name__}")
+        except Exception as exc:
+            # 校验没跑成功 ≠ 校验通过（审计 P0-5）。这里必须置 supported=None：
+            # 回落到 True 会让前端渲染绿色"自检通过"，等于把"不知道"当成"已确认"。
+            verdict = {
+                "supported": None,
+                "unparsed": True,
+                "error": f"自检输出无法解析为 JSON：{str(exc)[:160]}",
+                "unsupported_claims": [],
+            }
         ans.cost_usd = round(ans.cost_usd + chk.usage.cost_usd, 8)
         ans.prompt_tokens += chk.usage.prompt_tokens
         ans.completion_tokens += chk.usage.completion_tokens
         ans.selfcheck = verdict
-        if not verdict.get("supported", True):
-            # 自检不通过：重试一次，并把不支持的点明示给模型
+        if verdict.get("supported") is False:
+            # 只有**明确判否**才重试。None（解析失败）不重试：那次调用本身没给出结论，
+            # 重试只会掩盖"自检没跑成"这件事。
             bad = "；".join(verdict.get("unsupported_claims") or [])[:300]
             retry = await llm.chat(
                 [

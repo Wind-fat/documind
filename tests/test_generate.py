@@ -88,6 +88,27 @@ async def test_selfcheck_retry_path(ready, fake_llm):
     assert ans.selfcheck.get("retried") is True
 
 
+async def test_selfcheck_unparsed_is_unknown_not_pass(ready, fake_llm):
+    """审计 P0-5：自检返回非 JSON 时必须落到"未完成"（supported=None），不许当成通过。
+
+    钉住的是"不知道 ≠ 没问题"：曾经 except 里写 `{"supported": True}`，
+    前端据此渲染绿色"自检通过"，而那次检查根本没给出结论。
+    """
+    db = ready
+    res = await retrieve(db, "年假有几天", role="employee")
+    answer = json.dumps(
+        {"answer": "五天 [1]", "citations": [{"ref": 1, "quote": "员工每年享有带薪年假五天"}], "not_found": False}
+    )
+    llm = fake_llm([answer, "OK，看起来没问题"])  # 自检返回自由文本，不是 JSON
+    ans = await answer_question("年假有几天", res, llm, page_texts={}, selfcheck=True)
+
+    assert ans.selfcheck.get("supported") is None, f"自检没解析出来却被判成 {ans.selfcheck.get('supported')!r}"
+    assert ans.selfcheck.get("unparsed") is True
+    assert "JSON" in str(ans.selfcheck.get("error"))
+    assert not ans.refused, "自检没跑成不该把答案判成拒答（那是掩盖问题）"
+    assert len(llm.calls) == 2, "解析失败不重试：重试一次也拿不到判定，只会掩盖'没跑成'"
+
+
 async def test_citation_ref_out_of_range(ready, fake_llm):
     db = ready
     res = await retrieve(db, "年假有几天", role="employee")
