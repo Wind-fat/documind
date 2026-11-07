@@ -22,7 +22,10 @@ export interface Health {
   documents: number;
   chunks: number;
   embedder: string;
+  /** 库内索引版本（P1-04）：别用进程内计数，跨进程失效靠它 */
   index_version: number;
+  /** 版本之外的兜底指纹：文档数/块数/token 总数 */
+  index_fingerprint?: { documents: number; chunks: number; tokens: number };
   llm: { base_url: string; model: string };
 }
 

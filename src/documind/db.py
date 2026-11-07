@@ -2,7 +2,9 @@
 
 dev = SQLite（aiosqlite），prod = PostgreSQL + pgvector，同一套 ORM。
 向量存 float32 blob：dev 后端在进程内用 numpy 暴力搜索（万级 chunk 下 <10ms），
-prod 换 pgvector 的 `<=>` 算子，检索代码不动（见 index.VectorIndex 接口）。
+prod 换 pgvector 时**不是**"检索代码不动"：`chunks.embedding` 列类型、`IndexStore` 的
+`np.vstack` 组装、`VectorStore` 实现的 `<=>` 查询三处都要改（端口见 index.KeywordStore/VectorStore，
+切换清单见 docs/ARCH-REVIEW.md §4）。
 """
 
 from __future__ import annotations
@@ -151,6 +153,42 @@ class EvalRun(Base):
 
 
 Index("ix_chunks_doc_strategy", Chunk.doc_id, Chunk.strategy)
+
+
+class IndexState(Base):
+    """索引版本（单行，key='index'）。
+
+    P1-04：`IndexStore` 是进程内缓存，进程 A 入库/删块后进程 B 永远不刷新。
+    修法是把"库变了"这件事变成库里的一个事实：写路径在同一事务里 `version+1`，
+    读者每请求比一次（O(1) 单行读）。读者不缓存这个值以外的任何东西。
+
+    `IndexStore` 还会叠加 row-count 指纹（见 `retrieve.read_index_fingerprint`），
+    所以绕过 ORM 的裸 SQL 写入（迁移脚本、评测夹具）也能被发现。
+    """
+
+    __tablename__ = "index_state"
+
+    key: Mapped[str] = mapped_column(String(32), primary_key=True)
+    version: Mapped[int] = mapped_column(default=0)
+
+
+INDEX_STATE_KEY = "index"
+
+
+async def bump_index_version(session: AsyncSession) -> int:
+    """在写事务里调用：让所有进程的索引缓存失效。返回 bump 后的版本号。
+
+    必须在数据变更的**同一个事务**里调用（pipeline 在 commit 前调），
+    否则读者可能看到新版本号但读不到新数据。
+    """
+    res = await session.execute(
+        sa.update(IndexState).where(IndexState.key == INDEX_STATE_KEY).values(version=IndexState.version + 1)
+    )
+    if not res.rowcount:
+        session.add(IndexState(key=INDEX_STATE_KEY, version=1))
+        await session.flush()
+    row = await session.execute(sa.select(IndexState.version).where(IndexState.key == INDEX_STATE_KEY))
+    return int(row.scalar_one())
 
 
 _engine: sa.ext.asyncio.AsyncEngine | None = None

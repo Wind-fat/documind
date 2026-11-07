@@ -20,6 +20,9 @@ class Settings(BaseSettings):
 
     env: str = "dev"
     data_dir: Path = ROOT / "data"
+    # 解析器：只有 "auto"（按后缀选 pypdf / python-docx / markdown）。
+    # 没有 docling 档：DoclingParser 未接线且分页是伪造的，显式设置会直接报错（P1-02）。
+    parser: str = "auto"
     database_url: str = "sqlite+aiosqlite:///./documind.db"
 
     # ---- LLM（OpenAI 兼容）。默认指向本机 magpie 网关，可一行切到 aigate / 任意供应商 ----
@@ -71,6 +74,20 @@ class Settings(BaseSettings):
     # ---- 安全 ----
     admin_token: str = "dev-admin-token"
     session_secret: str = "dev-session-secret-change-me"
+
+    @field_validator("parser")
+    @classmethod
+    def _parser_is_auto_or_nothing(cls, v: str) -> str:
+        """把"设了 DOCUMIND_PARSER=docling 却毫无效果"变成启动期的可读错误（P1-02）。"""
+        value = (v or "auto").strip().lower()
+        if value == "auto":
+            return value
+        if value == "docling":
+            raise ValueError(
+                "parser=docling 不可用：DoclingParser 未接线，且它的分页是按字数伪造的，"
+                "会让 citation 高亮指向错误页。见 docs/adr/0001-parser.md"
+            )
+        raise ValueError(f"未知 parser={value!r}：当前只支持 auto（按文件后缀自动选择）")
 
     @field_validator(
         "llm_timeout_s", "refusal_threshold", "refusal_rerank_threshold", mode="before"

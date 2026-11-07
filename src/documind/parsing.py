@@ -4,7 +4,8 @@
 - 默认解析器用 pypdf，而不是 docling。理由：我们要的是**精确到字符的 span 偏移**做原文高亮，
   pypdf 的 extract_text 与页文本一一对应、偏移可控；docling 输出的是结构化 markdown，
   回映射到页/字符很麻烦，且带 torch 依赖（本机装不下）。
-- docling 作为可选适配器留了接口（DoclingParser），装上就换，不改上层。
+- docling 适配器（DoclingParser）**未接线、禁止使用**：它的分页是按字数伪造的，
+  真接上会让 citation 的高亮指向错误页且不报错。见 docs/adr/0001-parser.md。
 - 中文制度文本的天然切分单位是"第 X 条"，解析阶段就把 条/章/节 识别成结构，
   切块阶段才能做"结构感知"而不是按字数硬切。
 """
@@ -329,10 +330,17 @@ class MarkdownParser(Parser):
 
 
 class DoclingParser(Parser):
-    """可选：pip install docling 后 `DOCUMIND_PARSER=docling` 启用。
+    """未接线，禁止使用。
 
-    docling 输出 markdown；本适配器按 `## ` 标题重建结构，按长度伪造分页
-    （docling 的 provenance 里有页码，接法见 TODO）。默认不用它，见 ADR-0001。
+    它**不在** `_PARSERS` 里，`DOCUMIND_PARSER=docling` 会在 Settings 校验阶段直接报错（P1-02），
+    所以没有任何一条运行路径能走到这里。留着这个类只为记录"接 docling 要解决什么":
+
+    - 分页是**伪造**的（按 markdown 每 3000 字切一页），真接上会让 `Hit.page_start/page_end`
+      指向错误页，citation 高亮错位且不报错；
+    - 正确接法：取 docling 的 provenance（段级 page_no + bbox），映射成
+      `Paragraph(page, start, end)`，并补一条 `slice_text` 的等价断言（现有契约见
+      tests/test_parsing.py::test_offsets_match_page_text）；
+    - 拿到真 provenance 之前，不许把它加进注册表，也不许在文档里写成"装上就换"。
     """
 
     name = "docling"

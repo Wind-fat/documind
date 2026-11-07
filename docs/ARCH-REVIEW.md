@@ -295,6 +295,16 @@ span 契约只被 documind 自己的 `chunking` 遵守（bidpilot 绕过）；AC
 2. **"40 项 + 26 项测试全绿 = 边界是安全的"**。测试全在**进程内**：documind 的 40 项不 import 下游，bidpilot 的 26 项不校验 documind 版本。真正会断的地方（`pyproject` 的 path 依赖、`__init__` 无导出、无 CI）恰好没有任何测试覆盖。翻车信号：documind 某次重构后 bidpilot 的 5 个夹具测试红了但没人知道为什么。
 3. **"降级是安全的，因为降级路径有写"**。hash embedder、lexical reranker、模板应答三条降级路径都写了，但三条都**不可观测**：不体现在 `/health`、不体现在评测报告、不体现在交付物。降级本身不是问题，"无人知道降级了"才是。翻车信号：一份报告说 Recall@5 = 0.82，没人知道那份是用 hash embedder 跑的。
 
+## R2 本轮修订（@dev，2026-11-08）
+
+| 项 | 处置 | 落点 |
+|---|---|---|
+| P1-04 索引缓存跨进程永不刷新 | **已修**：新增 `index_state.version`（写路径同事务 bump）+ 行数/`tokens` 指纹兜底；`IndexStore.get()` 每请求比对，不一致才重建；`/health` 暴露库内 `index_version` 与 `index_fingerprint` | db.py `IndexState`/`bump_index_version`、retrieve.py `read_index_fingerprint`/`IndexStore.get`、pipeline.py 入库、app.py `/health`、tests/test_index_version.py |
+| P1-01 `Retriever` 死代码 | **已删**：换成 `KeywordStore`/`VectorStore` 两个 Protocol（`runtime_checkable`），`BM25Index`/`VectorIndex` 实现之，`SearchIndex.bm25/vector` 只依赖端口；ADR-0002 补"切后端仍需改 4 处，清单见 §4" | index.py、docs/adr/0002、tests/test_ports.py |
+| P1-02 DoclingParser 假冒可切换 | **已标不可用**：类注释首行"未接线，禁止使用"，`Settings.parser` 只接受 `auto`，`DOCUMIND_PARSER=docling` 配置期直接报错；ADR-0001 写明"当前不可切换"与真 provenance 的接法 | parsing.py、config.py、docs/adr/0001、tests/test_parsing.py |
+
+仍未动（不在本轮范围）：P1-05 已在此前提交闭环；其余 P1（bidpilot 侧）与 §7 的 B1–B6 保持原状。
+
 ## R1 风险（复核本身的不确定）
 
 - 两仓库工作区都有未提交改动，行号只对当前工作区成立；`c634140` 里的 bidpilot 与我现在读到的不是同一份代码。

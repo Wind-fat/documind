@@ -14,7 +14,7 @@ os.environ.setdefault("DOCUMIND_DATABASE_URL", f"sqlite+aiosqlite:///{TEST_DB.as
 
 import sqlalchemy as sa  # noqa: E402
 
-from documind.db import Base, get_engine, get_session_factory  # noqa: E402
+from documind.db import Base, bump_index_version, get_engine, get_session_factory  # noqa: E402
 from documind.retrieve import store  # noqa: E402
 
 
@@ -48,6 +48,8 @@ async def db():
         yield session
         for table in reversed(Base.metadata.sorted_tables):
             await session.execute(sa.delete(table))
+        # 清库同样是"库变了"：不 bump 版本号会让下一个用例读到上一个用例的缓存（P1-04）
+        await bump_index_version(session)
         await session.commit()
 
 

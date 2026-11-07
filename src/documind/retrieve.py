@@ -20,8 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .chunking import Chunk
 from .config import get_settings
+from .db import INDEX_STATE_KEY, Document, IndexState
 from .db import Chunk as ChunkRow
-from .db import Document
 from .embed import Embedder, EmbeddingSpaceMismatch, get_embedder
 from .index import IndexItem, SearchIndex, rrf_fuse
 from .rerank import Reranker, get_reranker
@@ -57,11 +57,54 @@ class RetrievalResult:
     debug: dict = field(default_factory=dict)
 
 
+@dataclass(frozen=True, slots=True)
+class IndexFingerprint:
+    """"库里的索引长什么样"的廉价指纹：版本号 + 行数 + token 总数。
+
+    三者任一变化都意味着内存索引过期：
+    - generation：写路径（pipeline / 迁移脚本）在同一事务里 bump；
+    - documents/chunks：捕获绕过写路径的裸 SQL 插入与删除；
+    - tokens：捕获原地改写块文本（行数不变）。
+    """
+
+    generation: int
+    documents: int
+    chunks: int
+    tokens: int
+
+
+async def read_index_fingerprint(session: AsyncSession) -> IndexFingerprint:
+    """一条语句读出库内索引指纹（每请求一次，O(1) 级别的单行聚合）。
+
+    刻意走 `select` 的标量子查询而不是三次往返：/query 的延迟预算不允许在这里加 RTT。
+    """
+    row = (
+        await session.execute(
+            sa.select(
+                sa.select(sa.func.coalesce(sa.func.max(IndexState.version), 0))
+                .where(IndexState.key == INDEX_STATE_KEY)
+                .scalar_subquery(),
+                sa.select(sa.func.count(Document.id)).scalar_subquery(),
+                sa.select(sa.func.count(ChunkRow.id)).scalar_subquery(),
+                sa.select(sa.func.coalesce(sa.func.sum(ChunkRow.tokens), 0)).scalar_subquery(),
+            )
+        )
+    ).one()
+    return IndexFingerprint(
+        generation=int(row[0]), documents=int(row[1]), chunks=int(row[2]), tokens=int(row[3])
+    )
+
+
 class IndexStore:
-    """进程内索引缓存：按 (策略, 向量空间) 缓存，文档变更后 bump 版本失效。
+    """进程内索引缓存：按 (策略, 向量空间) 缓存，**每次 get 都比对库内指纹**（P1-04）。
+
+    旧实现只在 `invalidate()` 时清缓存，那只影响调用它的进程：CLI 入库后已在跑的
+    uvicorn 永远看不到新文档，删掉的块仍会被命中，且日志里没有任何异常。现在
+    读者每请求读一次指纹（单行 + 两个 count），不一致就整表丢弃重建。
 
     dev 的取舍：万级 chunk 下重建 ~0.3s，比维护一个外部索引服务简单得多；
-    多副本时内存索引各自重建会有短暂不一致，这也是 prod 要换 OpenSearch/pgvector 的原因。
+    多副本之间仍有"最多一次请求"的窗口不一致（读到指纹到读完 rows 之间），
+    这是 prod 要换 OpenSearch/pgvector 的原因，也是这里不做强一致的原因。
 
     P0-02：建索引前先核对**向量空间指纹**。库里的块与当前 embedder 不是同一个 `model@dim`
     时直接抛 EmbeddingSpaceMismatch —— 不同空间的向量算余弦不会报错，只会静默给出错的排名。
@@ -69,11 +112,13 @@ class IndexStore:
 
     def __init__(self) -> None:
         self._cache: dict[str, SearchIndex] = {}
-        self.version = 0
+        self._fingerprint: IndexFingerprint | None = None
+        self.version = 0  # 最近一次见到的库内版本号（仅用于观测，不参与判定）
+        self.builds = 0  # 重建次数：测试钉住"不许每请求都重建"
 
     def invalidate(self) -> None:
+        """本进程主动丢弃缓存。跨进程失效**不靠它**，靠库里的指纹。"""
         self._cache.clear()
-        self.version += 1
 
     @staticmethod
     def _mismatch_error(space: str, by_space: dict[str, int], docs: list[str]) -> EmbeddingSpaceMismatch:
@@ -92,6 +137,14 @@ class IndexStore:
         embedder = embedder or get_embedder()
         space = embedder.space
         key = f"{strategy}::{space}"
+
+        # --- 跨进程失效：每次都比对库内指纹（旧实现在这里直接 return 缓存） ---
+        fp = await read_index_fingerprint(session)
+        if fp != self._fingerprint:
+            self._cache.clear()
+            self._fingerprint = fp
+            self.version = fp.generation
+
         if key in self._cache:
             return self._cache[key]
         rows = (
@@ -157,6 +210,7 @@ class IndexStore:
         matrix = np.vstack(vecs).astype(np.float32) if vecs else None
         idx = SearchIndex.build(strategy, items, matrix)
         self._cache[key] = idx
+        self.builds += 1
         return idx
 
 

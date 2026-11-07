@@ -5,7 +5,14 @@
 
 ## 决策
 
-默认解析器用 pypdf（PDF）、python-docx（DOCX）、自带 MD 解析；docling 作为可选适配器（`DoclingParser`）保留。
+默认解析器用 pypdf（PDF）、python-docx（DOCX）、自带 MD 解析。
+
+**当前不可切换（2026-11 复核）**：`DoclingParser` 未接线，禁止使用。
+`get_parser()` 只按后缀查 `_PARSERS`，`Settings.parser` 只接受 `"auto"`；
+`DOCUMIND_PARSER=docling` 会在配置校验阶段直接报错（不是"静默无效"）。
+它的分页是按 markdown 字数伪造的（parsing.py `DoclingParser`），真接上会让 citation 的
+页码/高亮指向错误页且不报错。要启用它，先拿到 docling 的段级 provenance（page_no + bbox）
+并补"解析后 span 仍可定位"的测试，见 docs/ARCH-REVIEW.md P1-02。
 
 ## 理由
 
@@ -22,4 +29,6 @@
 
 ## 什么时候该换
 
-表格问答、扫描件、双栏排版这些场景一出现，就换 docling（适配器已留），并补一条"解析后 span 仍可定位"的测试。
+表格问答、扫描件、双栏排版这些场景一出现，就接 docling —— 但**不是"适配器已留、直接开"**：
+现有 `DoclingParser` 的分页是伪造的，必须先把它改成读 provenance（段级 page_no + bbox），
+再补一条"解析后 span 仍可定位"的测试，才允许注册进 `_PARSERS`。

@@ -3,7 +3,9 @@
 为什么自己做 BM25 而不是用 SQLite FTS5：FTS5 的 unicode61 分词器把连续中文当成一个 token，
 "年假可以折现吗"整串匹配不到"员工享有年假"，中文检索直接失效。字符 bigram 是把中文当无空格语言
 处理的标准做法，且不需要分词词典。
-生产环境这两个索引分别换 OpenSearch / pgvector，接口不变（见 docs/adr/0002-hybrid-retrieval.md）。
+换 OpenSearch / pgvector 时要实现的是下面两个端口（`KeywordStore` / `VectorStore`），
+但"接口不变"只覆盖检索这一层：dev 侧的组装（`IndexStore` 全表 vstack、`chunks.embedding` BLOB）
+仍要改，真实清单见 docs/adr/0002-hybrid-retrieval.md 与 docs/ARCH-REVIEW.md §4。
 """
 
 from __future__ import annotations
@@ -12,7 +14,7 @@ import math
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 import numpy as np
 
@@ -104,14 +106,39 @@ class VectorIndex:
         return cosine_search(query_vec, self.matrix, self.ids, top_n)
 
 
+@runtime_checkable
+class KeywordStore(Protocol):
+    """关键词检索端口。`BM25Index` 是 dev 实现，生产换 OpenSearch。
+
+    契约两条：① 返回 (chunk_id, score) 且按分数降序；② `allowed` 是**打分前**的过滤，
+    不是返回后再隐藏——否则无权文档的分数会通过名次侧漏（见 docs/ARCH-REVIEW.md P1-01）。
+    """
+
+    def search(self, query: str, top_n: int, allowed: set[str] | None = None) -> list[tuple[str, float]]: ...
+
+
+@runtime_checkable
+class VectorStore(Protocol):
+    """向量检索端口。入参是**已编码的查询向量**：向量化留在调用方，端口不认 embedder。
+
+    这里刻意收 `np.ndarray` 而不是 str —— 旧 `Retriever` 声明 `search(query: str, ...)`，
+    与 `VectorIndex.search(query_vec, ...)` 根本对不上，是零实现零引用的死代码（P1-01 已删）。
+    """
+
+    def search(
+        self, query_vec: np.ndarray, top_n: int, allowed: set[str] | None = None
+    ) -> list[tuple[str, float]]: ...
+
+
 @dataclass(slots=True)
 class SearchIndex:
     """一个切块策略对应一套索引。"""
 
     strategy: str
     items: dict[str, IndexItem] = field(default_factory=dict)
-    bm25: BM25Index | None = None
-    vector: VectorIndex | None = None
+    # 字段类型是端口而不是实现：换 OpenSearch/pgvector 时 SearchIndex 不需要改
+    bm25: KeywordStore | None = None
+    vector: VectorStore | None = None
 
     @classmethod
     def build(cls, strategy: str, items: list[IndexItem], matrix: np.ndarray | None) -> SearchIndex:
@@ -132,7 +159,3 @@ def rrf_fuse(
         for rank, (doc_id, _score) in enumerate(run):
             acc[doc_id] += w / (k + rank + 1)
     return sorted(acc.items(), key=lambda x: -x[1])
-
-
-class Retriever(Protocol):  # pragma: no cover - 接口文档
-    def search(self, query: str, top_n: int, allowed: set[str] | None) -> list[tuple[str, float]]: ...

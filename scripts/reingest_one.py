@@ -5,7 +5,7 @@ import sys
 
 import sqlalchemy as sa
 
-from documind.db import Chunk, Document, Page, get_session_factory, init_db
+from documind.db import Chunk, Document, Page, bump_index_version, get_session_factory, init_db
 from documind.pipeline import ingest_document
 from documind.retrieve import store
 
@@ -20,6 +20,8 @@ async def main() -> None:
             await s.execute(sa.delete(Chunk).where(Chunk.doc_id == d.id))
             await s.execute(sa.delete(Page).where(Page.doc_id == d.id))
             await s.execute(sa.delete(Document).where(Document.id == d.id))
+        # 删旧块也是"库变了"：bump 让别的进程（uvicorn）下一次查询就重建（P1-04）
+        await bump_index_version(s)
         await s.commit()
         store.invalidate()
         res = await ingest_document(s, f"evals/datasets/{filename}", acl_roles=acl)

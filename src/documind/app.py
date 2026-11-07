@@ -21,7 +21,7 @@ from .db import Chunk, Document, EvalRun, Page, User, get_db, get_session_factor
 from .embed import EmbeddingSpaceMismatch, embedder_health
 from .parsing import EmptyDocumentError
 from .pipeline import ask, ingest_document, stream_answer
-from .retrieve import store
+from .retrieve import read_index_fingerprint
 from .thresholds import ThresholdState, resolve_refusal_threshold
 
 app = FastAPI(title="DocuMind", version="0.1.0", description="带证据链与拒答能力的企业知识库问答")
@@ -112,14 +112,15 @@ def require_admin(x_admin_token: str = Header(default="")) -> None:
 
 @app.get("/health")
 async def health(db: AsyncSession = Depends(get_db)) -> dict:
-    docs = (await db.execute(sa.select(sa.func.count(Document.id)))).scalar_one()
-    chunks = (await db.execute(sa.select(sa.func.count(Chunk.id)))).scalar_one()
     emb = embedder_health()
     thr = await _threshold_state(db)
+    # 索引版本进 /health（P1-04）：它是**库里的**版本，不是本进程计数器，
+    # 所以「进程 A 入库、进程 B 的 /health 还是旧值」这种事故在这里一眼可见。
+    fp = await read_index_fingerprint(db)
     return {
         "status": "ok",
-        "documents": docs,
-        "chunks": chunks,
+        "documents": fp.documents,
+        "chunks": fp.chunks,
         "embedder": emb["name"],
         "embed_dim": emb["dim"],
         "embed_space": emb["space"],
@@ -127,7 +128,9 @@ async def health(db: AsyncSession = Depends(get_db)) -> dict:
         # 降级必须是可观测的：bge→hash 只能在这里被看到（P0-02）
         "degraded": ["embedder"] if emb["degraded"] else [],
         "degraded_reason": emb["degraded_reason"],
-        "index_version": store.version,
+        "index_version": fp.generation,
+        # 指纹的其余两项：绕过写路径的裸 SQL 变更也能从 /health 看出来
+        "index_fingerprint": {"documents": fp.documents, "chunks": fp.chunks, "tokens": fp.tokens},
         "llm": {"base_url": get_settings().llm_base_url, "model": get_settings().llm_model},
         # 实际生效的拒答阈值与它的来源（P1-03）：mismatch=true 表示 env 覆盖与标定值打架
         "refusal_threshold": thr.to_dict(),

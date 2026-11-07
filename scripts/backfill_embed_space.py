@@ -24,7 +24,7 @@ import asyncio
 
 import sqlalchemy as sa
 
-from documind.db import Chunk, Document, get_session_factory, init_db
+from documind.db import Chunk, Document, bump_index_version, get_session_factory, init_db
 from documind.embed import embedder_health
 
 
@@ -84,6 +84,9 @@ async def main(argv: list[str] | None = None) -> int:
             .where(Document.id.in_(doc_ids), Document.embed_space == "")
             .values(embed_space=space)
         )
+        # 只改了向量空间指纹（行数/token 不变），必须显式 bump，否则已在跑的服务
+        # 会继续用旧空间的索引（P1-04）
+        await bump_index_version(s)
         await s.commit()
 
     from documind.retrieve import store

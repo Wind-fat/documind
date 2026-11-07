@@ -10,13 +10,18 @@
 ```json
 {"status":"ok","documents":3,"chunks":912,"embedder":"BAAI/bge-small-zh-v1.5","embed_dim":512,
  "embed_space":"BAAI/bge-small-zh-v1.5@512","embedder_backend":"bge",
- "degraded":[],"degraded_reason":"","index_version":1,
+ "degraded":[],"degraded_reason":"","index_version":7,
+ "index_fingerprint":{"documents":3,"chunks":912,"tokens":184320},
  "llm":{"base_url":"http://127.0.0.1:3425/v1","model":"qwen-cn/qwen3.8-flash"},
  "refusal_threshold":{"reranker":"BAAI/bge-reranker-base","value":-4.25,"source":"calibrated",
    "calibrated":-4.25,"calibrated_run":"a1b2c3","calibrated_at":"2026-11-07T12:00:00+00:00",
    "mismatch":false,"warning":""},
  "streaming":{"endpoint":"/query/stream","events":["evidence","token","answer"]}}
 ```
+`index_version` 是**库里的**索引版本（`index_state.version`），不是进程内计数器：别的进程入库后
+它会变，读者据此重建内存索引（P1-04）。`index_fingerprint` 是版本之外的兜底指纹（文档数/块数/token 总数），
+所以绕过写路径的裸 SQL 变更也能看出来。
+
 `degraded` 非空表示发生了自动降级（目前只有 `embedder`：bge 拉不下来退到 hash），原因在 `degraded_reason`。
 **别忽略这一项**：降级后检索质量会掉，而接口仍返回 200。
 

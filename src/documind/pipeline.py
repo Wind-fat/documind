@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .chunking import STRATEGIES, chunk_document
 from .config import get_settings
 from .db import Chunk as ChunkRow
-from .db import Conversation, Document, Message, Page
+from .db import Conversation, Document, Message, Page, bump_index_version
 from .embed import get_embedder
 from .generate import Answer, AnswerStream, answer_question
 from .llm import get_llm
@@ -125,6 +125,8 @@ async def ingest_document(
             "avg_chars": round(sum(lengths) / len(lengths), 1),
             "max_chars": max(lengths),
         }
+    # 版本号与数据在同一个事务里提交：别的进程（uvicorn）下一次 get 就会重建索引（P1-04）
+    await bump_index_version(session)
     await session.commit()
     store.invalidate()
     return {
