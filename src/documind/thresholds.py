@@ -104,7 +104,10 @@ async def latest_calibration(session: AsyncSession, reranker: str) -> tuple[floa
     )
     if row is None or row.recommended_threshold is None:
         return None
-    return float(row.recommended_threshold), row.id, row.created_at.isoformat()
+    # created_at 可能是 NULL（老库行 / 手工迁移 / 老版本 default 未落库）——
+    # 不能让它把整个 /health 拖成 500，时间只是说明性字段。
+    created_at = row.created_at.isoformat() if row.created_at else ""
+    return float(row.recommended_threshold), row.id, created_at
 
 
 async def resolve_refusal_threshold(session: AsyncSession, reranker: str) -> ThresholdState:

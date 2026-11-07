@@ -52,11 +52,17 @@ def _pct(vals: list[float], p: float) -> float:
 
 
 async def main(args: argparse.Namespace) -> dict:
-    from documind.db import get_session_factory
+    from documind.db import ensure_schema_compat, get_session_factory
     from documind.generate import _pre_llm_refusal
     from documind.rerank import get_reranker
     from documind.retrieve import retrieve
     from documind.thresholds import resolve_refusal_threshold
+
+    # 老库补列必须在读 eval_runs 之前跑：它不是应用启动路径，没人替它做迁移，
+    # 否则 `no such column: eval_runs.reranker` 会以裸 SQL 报错的形式炸出来。
+    added = await ensure_schema_compat()
+    if added:
+        print(f"[schema] 已为现有库补齐列: {', '.join(added)}", flush=True)
 
     cases = select_cases(args.dataset, args.limit, args.ans_limit, args.unans_limit)
     reranker = get_reranker()
@@ -117,6 +123,29 @@ async def main(args: argparse.Namespace) -> dict:
             out["strategies"][strategy] = {"summary": summary, "rows": rows}
             print(f"[{strategy}] " + " ".join(f"{k}={v}" for k, v in summary.items() if not k.startswith("n_")), flush=True)
 
+            if getattr(args, "write", False):
+                # 标定回写：这是 P1-03 缺的那条路径——不调 judge 也能得到可追溯的阈值，
+                # 写进 eval_runs 后 /health 的 source 就从 builtin 变 calibrated。
+                from documind.db import EvalRun
+
+                session.add(
+                    EvalRun(
+                        strategy=f"retrieval-calib:{strategy}",
+                        dataset=args.dataset,
+                        n_cases=summary["n_cases"],
+                        metrics=json.dumps(summary, ensure_ascii=False),
+                        report_path="scripts/eval_retrieval.py",
+                        reranker=reranker.name,
+                        recommended_threshold=float(summary["recommended_threshold"]),
+                    )
+                )
+                await session.commit()
+                print(
+                    f"[write] 已写入标定行：reranker={reranker.name} "
+                    f"recommended_threshold={summary['recommended_threshold']} n_cases={summary['n_cases']}",
+                    flush=True,
+                )
+
     if args.json:
         Path(args.json).write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"[json] {args.json}")
@@ -131,4 +160,9 @@ if __name__ == "__main__":
     ap.add_argument("--ans-limit", type=int, default=20)
     ap.add_argument("--unans-limit", type=int, default=8)
     ap.add_argument("--json", default=None)
+    ap.add_argument(
+        "--write",
+        action="store_true",
+        help="把标定出的推荐阈值写进 eval_runs（reranker 分桶），供 /health 与运行时读取",
+    )
     asyncio.run(main(ap.parse_args()))
