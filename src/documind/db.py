@@ -180,14 +180,40 @@ async def bump_index_version(session: AsyncSession) -> int:
 
     必须在数据变更的**同一个事务**里调用（pipeline 在 commit 前调），
     否则读者可能看到新版本号但读不到新数据。
+
+    首写用 `INSERT ... ON CONFLICT(key) DO UPDATE`，不写成「先 UPDATE、0 行再 INSERT」：
+    后者在两个进程同时做第一次 bump 时会撞主键（IntegrityError），而这条路径正好发生在
+    「部署后两个实例同时入库」这种最容易撞的时刻。SQLite ≥3.24 与 PostgreSQL 都支持 upsert。
     """
-    res = await session.execute(
-        sa.update(IndexState).where(IndexState.key == INDEX_STATE_KEY).values(version=IndexState.version + 1)
+    values = {"key": INDEX_STATE_KEY, "version": 1}
+    dialect = session.get_bind().dialect.name
+    if dialect == "sqlite":
+        from sqlalchemy.dialects.sqlite import insert as dialect_insert
+    elif dialect == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert as dialect_insert
+    else:  # pragma: no cover - 未支持的方言退回旧行为（单写者假设）
+        res = await session.execute(
+            sa.update(IndexState)
+            .where(IndexState.key == INDEX_STATE_KEY)
+            .values(version=IndexState.version + 1)
+        )
+        if not res.rowcount:
+            session.add(IndexState(key=INDEX_STATE_KEY, version=1))
+            await session.flush()
+        row = await session.execute(
+            sa.select(IndexState.version).where(IndexState.key == INDEX_STATE_KEY)
+        )
+        return int(row.scalar_one())
+
+    stmt = dialect_insert(IndexState).values(**values)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[IndexState.key],
+        set_={"version": IndexState.version + 1},
     )
-    if not res.rowcount:
-        session.add(IndexState(key=INDEX_STATE_KEY, version=1))
-        await session.flush()
-    row = await session.execute(sa.select(IndexState.version).where(IndexState.key == INDEX_STATE_KEY))
+    await session.execute(stmt)
+    row = await session.execute(
+        sa.select(IndexState.version).where(IndexState.key == INDEX_STATE_KEY)
+    )
     return int(row.scalar_one())
 
 

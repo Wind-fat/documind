@@ -144,6 +144,61 @@ async def test_bump_is_idempotent_within_one_transaction(db):
     assert (await read_index_fingerprint(db)).generation >= v2
 
 
+async def test_bump_first_write_is_upsert_not_update_then_insert():
+    """首写必须是 upsert：先 UPDATE、0 行再 INSERT 会在两个进程同时首写时撞主键。
+
+    这里不做真并发（SQLite 写锁会把它变成 flaky），而是钉住生成的 SQL：
+    两种实际在用的方言都必须编译出 ON CONFLICT。
+    """
+    from sqlalchemy.dialects import postgresql, sqlite
+
+    from documind.db import INDEX_STATE_KEY, IndexState
+
+    for dialect in (sqlite.dialect(), postgresql.dialect()):
+        insert_mod = (
+            __import__("sqlalchemy.dialects.sqlite", fromlist=["insert"]).insert
+            if dialect.name == "sqlite"
+            else __import__("sqlalchemy.dialects.postgresql", fromlist=["insert"]).insert
+        )
+        stmt = insert_mod(IndexState).values(key=INDEX_STATE_KEY, version=1)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[IndexState.key], set_={"version": IndexState.version + 1}
+        )
+        sql = str(stmt.compile(dialect=dialect))
+        assert "ON CONFLICT" in sql.upper(), sql
+        assert "DO UPDATE" in sql.upper(), sql
+
+
+async def test_bump_upsert_on_fresh_db_and_existing_row(tmp_path):
+    """在全新库上验两件事：首写建行=1；已有行（别处写的）再 bump 是 +1 而不是撞主键。"""
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from documind.db import INDEX_STATE_KEY, Base
+
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'bump.db'}")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+
+    async with maker() as s:
+        assert await bump_index_version(s) == 1
+        await s.commit()
+
+    # 模拟别的进程已经写过这一行
+    async with engine.begin() as conn:
+        await conn.exec_driver_sql(
+            "UPDATE index_state SET version = 7 WHERE key = :k", {"k": INDEX_STATE_KEY}
+        )
+
+    async with maker() as s:
+        assert await bump_index_version(s) == 8
+        await s.commit()
+
+    async with maker() as s:
+        assert (await read_index_fingerprint(s)).generation == 8
+    await engine.dispose()
+
+
 async def test_hits_only_reference_live_documents(db, corpus_md: Path, secret_md: Path):
     """重建后每个命中都必须指向库里还活着的文档（缓存不得残留上一轮的 doc_id）。"""
     await ingest_document(db, corpus_md, acl_roles=["all"])
