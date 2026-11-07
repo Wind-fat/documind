@@ -81,7 +81,7 @@ export interface Answer {
   retrieval_ms: number;
   generation_ms: number;
   top_score: number;
-  selfcheck?: { supported?: boolean; retried?: boolean; [key: string]: unknown };
+  selfcheck?: { supported?: boolean | null; retried?: boolean; unparsed?: boolean; error?: string; [key: string]: unknown };
   debug: AnswerDebug;
 }
 

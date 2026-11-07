@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { getPageText, toApiError, type ApiError } from "@/lib/api";
 import { pageLabel } from "@/lib/format";
 import type { PageText, ViewerTarget } from "@/lib/types";
@@ -19,6 +19,21 @@ export default function PageViewer({ target, onClose }: { target: ViewerTarget; 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | null>(null);
   const markRef = useRef<HTMLElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const closeRef = useRef<HTMLButtonElement | null>(null);
+
+  /**
+   * P1-13 焦点管理：打开时把焦点移进弹层，关闭时还给触发它的证据卡。
+   * 少了这两步，`aria-modal="true"` 只是装饰——Tab 会走到弹层背后的表格与侧栏。
+   */
+  useEffect(() => {
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeRef.current?.focus();
+    return () => {
+      // 触发元素可能已因翻页/重渲染被卸载，先确认还在文档里再还焦点
+      if (trigger && document.contains(trigger)) trigger.focus();
+    };
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -105,6 +120,45 @@ export default function PageViewer({ target, onClose }: { target: ViewerTarget; 
   const canPrev = page > 1;
   const canNext = page < Math.max(target.page_end, page);
 
+  /**
+   * Tab 在弹层内循环（P1-13）。`aria-modal` 只是给读屏的宣告，浏览器不会自动拦 Tab，
+   * 所以这里自己收口：末尾 Tab 回第一个、开头 Shift+Tab 到最后一个，焦点在外则先拽回来。
+   * 每次按键现查 DOM：翻页按钮会被 disabled（页首/页尾），缓存列表会指向不可聚焦的节点。
+   */
+  const trapTab = (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+    if (event.key !== "Tab") return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const nodes = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((node) => node.offsetParent !== null);
+    if (nodes.length === 0) {
+      event.preventDefault();
+      return;
+    }
+    const first = nodes[0];
+    const last = nodes[nodes.length - 1];
+    if (!first || !last) {
+      event.preventDefault();
+      return;
+    }
+    const active = document.activeElement as HTMLElement | null;
+    if (!active || !dialog.contains(active)) {
+      event.preventDefault();
+      (event.shiftKey ? last : first).focus();
+      return;
+    }
+    if (!event.shiftKey && active === last) {
+      event.preventDefault();
+      first.focus();
+    } else if (event.shiftKey && active === first) {
+      event.preventDefault();
+      last.focus();
+    }
+  };
+
   return (
     <div
       className="modal-backdrop"
@@ -113,7 +167,15 @@ export default function PageViewer({ target, onClose }: { target: ViewerTarget; 
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="modal" role="dialog" aria-modal="true" aria-label="原文定位">
+      <div
+        className="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="原文定位"
+        ref={dialogRef}
+        tabIndex={-1}
+        onKeyDown={trapTab}
+      >
         <div className="modal-head">
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="modal-title">
@@ -126,7 +188,7 @@ export default function PageViewer({ target, onClose }: { target: ViewerTarget; 
               {target.chunk_id ? ` · chunk ${target.chunk_id}` : ""}
             </div>
           </div>
-          <button type="button" className="btn btn-sm" onClick={onClose} aria-label="关闭">
+          <button type="button" className="btn btn-sm" onClick={onClose} aria-label="关闭" ref={closeRef}>
             Esc ✕
           </button>
         </div>

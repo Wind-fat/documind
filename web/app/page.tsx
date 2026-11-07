@@ -345,11 +345,13 @@ export default function AskPage() {
             {error ? (
               <ErrorState
                 title={
-                  error.status === 0
-                    ? "后端不可达"
-                    : error.status === 401
-                      ? "身份无效（401）"
-                      : "请求失败"
+                  error.status === 0 || error.status === 502
+                    ? "后端不可达（502）"
+                    : error.status === 504
+                      ? "后端响应超时（504）"
+                      : error.status === 401
+                        ? "身份无效（401）"
+                        : "请求失败"
                 }
                 message={error.detail}
                 status={error.status}
@@ -423,6 +425,16 @@ export default function AskPage() {
                     <span className="tag accent">{(answer.citations ?? []).length} 引用</span>
                     {answer.selfcheck?.supported === true ? <span className="tag ok">自检通过</span> : null}
                     {answer.selfcheck?.supported === false ? <span className="tag warn">自检未通过</span> : null}
+                    {answer.selfcheck && answer.selfcheck.supported !== true && answer.selfcheck.supported !== false ? (
+                      // supported=None 表示自检那次调用没给出可判定的结论（非 JSON / 非对象）。
+                      // 这是"不知道"，不是"通过"——不许渲染成绿色（审计 P0-5）。
+                      <span
+                        className="tag faint"
+                        title={String(answer.selfcheck.error ?? "自检输出无法解析，未得出结论")}
+                      >
+                        自检未完成
+                      </span>
+                    ) : null}
                   </span>
                   <span className="answer-metric">
                     总 <b>{ms(answer.latency_ms)}</b>

@@ -182,10 +182,26 @@ export default function DocumentsPage() {
                           }}
                         >
                           <td>
-                            <span className="doc-name">{doc.title}</span>
-                            <span className="doc-file">
-                              {doc.filename} · <span className="doc-id">{doc.id}</span>
-                            </span>
+                            {/* P1-14：整行 onClick 只有鼠标可达。真正的可聚焦控件是标题按钮，
+                                Tab 能停在它上面、Enter/Space 打开章节树，读屏也知道这是可展开项。 */}
+                            <button
+                              type="button"
+                              className="doc-pick"
+                              aria-expanded={isSelected}
+                              aria-disabled={!doc.visible}
+                              title={doc.visible ? "加载/收起章节树" : "当前身份无权访问该文档"}
+                              onClick={(event) => {
+                                // 行上也有 onClick（鼠标点空白处仍可选）；这里拦掉，避免切换两次
+                                event.stopPropagation();
+                                if (!doc.visible) return;
+                                setSelected((prev) => (prev?.id === doc.id ? null : doc));
+                              }}
+                            >
+                              <span className="doc-name">{doc.title}</span>
+                              <span className="doc-file">
+                                {doc.filename} · <span className="doc-id">{doc.id}</span>
+                              </span>
+                            </button>
                           </td>
                           <td className="mono">{doc.pages}</td>
                           <td>
