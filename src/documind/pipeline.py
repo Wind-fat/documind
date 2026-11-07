@@ -43,6 +43,8 @@ async def ingest_document(
     p = Path(path)
     t0 = time.perf_counter()
     parsed = parse_file(p)
+    # 二次断言：自定义 Parser 可能绕过 parse_file 的出口守卫，空文档绝不能走到切块/落库
+    parsed.require_text()
     embedder = get_embedder()
     digest = _sha256(p)
 

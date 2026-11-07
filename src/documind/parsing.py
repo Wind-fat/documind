@@ -26,6 +26,14 @@ RE_TERMINAL = re.compile(r"[。；：！？!?;:]$")
 RE_MD_HEADING = re.compile(r"^(#{1,6})\s*(.+)$")
 
 
+class EmptyDocumentError(ValueError):
+    """解析结果里没有任何可检索文本（多为扫描件 / 图片型 PDF，需要先做 OCR）。
+
+    继承 ValueError 是为了让已有的 `except ValueError`（不支持的后缀）调用方不用改；
+    但调用方应当**优先**按本类型分支，给出可读提示而不是当成一般参数错误。
+    """
+
+
 @dataclass(slots=True)
 class Paragraph:
     """一段正文，带页内字符偏移。offset 相对于 `ParsedDocument.pages[page-1]`。"""
@@ -71,6 +79,26 @@ class ParsedDocument:
             else:
                 parts.append(page)
         return "\n".join(p for p in parts if p)
+
+    @property
+    def is_empty(self) -> bool:
+        """页文本全为空 / 没有段落 → 这份文件没有可检索的文本层。"""
+        if not self.paragraphs:
+            return True
+        return not any(p.strip() for p in self.pages)
+
+    def require_text(self) -> ParsedDocument:
+        """空文档出口守卫（ADR-0001 承诺的\"显式报未提取到文本\"）。
+
+        放在解析出口而不是切块阶段，是为了让空交付物在**落库之前**就失败：
+        一旦 Document/Chunk 被 add 进 session，调用方很容易顺手 commit 出一个空知识库。
+        """
+        if self.is_empty:
+            raise EmptyDocumentError(
+                f"未提取到文本，需要 OCR：{self.filename} 共 {len(self.pages)} 页，未识别出任何段落"
+                "（若为扫描件/图片型 PDF，请先 OCR 再入库）"
+            )
+        return self
 
     def outline(self) -> list[dict]:
         """章节树（给 BidPilot 的"章节树"复用，也给 /documents/{id}/outline 用）。"""
@@ -341,8 +369,9 @@ def get_parser(filename: str | Path) -> Parser:
 
 
 def parse_file(path: str | Path) -> ParsedDocument:
+    """解析文件；结果为空（扫描件 / 空文件）时抛 EmptyDocumentError，不返回空壳。"""
     p = Path(path)
-    return get_parser(p.name).parse(p)
+    return get_parser(p.name).parse(p).require_text()
 
 
 def iter_paragraph_text(doc: ParsedDocument) -> Iterable[str]:

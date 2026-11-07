@@ -9,15 +9,16 @@ import time
 from pathlib import Path
 
 import sqlalchemy as sa
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
 from .db import Chunk, Document, EvalRun, Page, User, get_db, init_db
 from .embed import get_embedder
+from .parsing import EmptyDocumentError
 from .pipeline import ask, ingest_document, stream_answer
 from .retrieve import store
 
@@ -105,6 +106,15 @@ async def health(db: AsyncSession = Depends(get_db)) -> dict:
     }
 
 
+@app.exception_handler(EmptyDocumentError)
+async def _empty_document_handler(_: Request, exc: EmptyDocumentError) -> JSONResponse:
+    """空文档不是 500 也不是 200：给前端一个能直接展示的中文错误（P0-04）。"""
+    return JSONResponse(
+        status_code=422,
+        content={"detail": {"code": "empty_document", "message": str(exc)}},
+    )
+
+
 @app.post("/documents")
 async def upload_document(
     file: UploadFile = File(...),
@@ -124,6 +134,12 @@ async def upload_document(
         raise HTTPException(400, f"acl_roles 不是合法 JSON: {acl_roles}") from exc
     try:
         return await ingest_document(db, tmp, acl_roles=roles, title=title)
+    except EmptyDocumentError as exc:
+        # 422 而不是 200 空库：扫描件/图片型 PDF 必须让用户看见"需要 OCR"
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "empty_document", "message": str(exc)},
+        ) from exc
     finally:
         # Windows 上文件可能还被读句柄占着，删不掉不该让请求失败
         for _ in range(3):

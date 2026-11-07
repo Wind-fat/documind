@@ -11,17 +11,23 @@ from .db import get_session_factory, init_db, upsert_user
 
 
 async def _ingest(args: argparse.Namespace) -> None:
+    from .parsing import EmptyDocumentError
     from .pipeline import ingest_document
 
     await init_db()
     async with get_session_factory()() as s:
         for p in args.paths:
-            res = await ingest_document(
-                s,
-                p,
-                acl_roles=args.acl.split(","),
-                title=args.title,
-            )
+            try:
+                res = await ingest_document(
+                    s,
+                    p,
+                    acl_roles=args.acl.split(","),
+                    title=args.title,
+                )
+            except EmptyDocumentError as exc:
+                # 空文档（扫描件 / 空文件）给一行可读错误 + 非零退出码，不打印 traceback
+                print(f"入库失败：{exc}", file=sys.stderr)
+                raise SystemExit(2) from exc
             print(json.dumps(res, ensure_ascii=False, indent=2))
 
 
