@@ -36,6 +36,18 @@ class Settings(BaseSettings):
     top_k: int = 5
     recall_n: int = 30            # 粗排召回数，精排从这里挑 top_k
     rrf_k: int = 60
+    # 重排（cross-encoder）的延迟杠杆，实测见 docs/RERANK-PERF.md：
+    # 本机 i5-12500H（12 核/16 线程）上 fp32 bge-reranker-base 约 700 token/s
+    # （= 1.4ms/token，与批大小基本无关），30 候选×512 token = 15 360 token ≈ 21.3s，
+    # 其中 99% 是 forward 而不是分词。
+    # candidates：真正送进 CE 的候选数（RRF 顺序截断，但不低于 top_k）
+    # max_tokens：每条候选的 token 上限（模型自身 512）；focus 模式下按问题挑句窗口
+    # batch_size：按长度排序后每批条数（批内 padding 到最长，长度聚合能少浪费 padding）
+    rerank_candidates: int = 10
+    rerank_max_tokens: int = 256
+    rerank_truncate: str = "focus"  # head | focus（按问题挑句窗口，见 rerank.py:_window）
+    rerank_batch_size: int = 8
+    rerank_threads: int = 0       # 0 = 交给 onnxruntime 默认（= 物理核数）
     # 拒答阈值：由 evals 的 P-R 曲线标定，不是拍脑袋的 0.6。见 docs/adr/0004-refusal-threshold.md
     # 优先级（P1-03，见 thresholds.py）：DOCUMIND_REFUSAL_THRESHOLD > 最近一次标定值 > 内置占位。
     # 两个字段都是 None 表示"没显式覆盖"——这里**不能**给默认数值，

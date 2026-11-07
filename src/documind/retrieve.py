@@ -223,8 +223,11 @@ async def retrieve(
     titles = dict((await session.execute(sa.select(Document.id, Document.title))).all())
 
     pool = fused[: max(recall_n, top_k)]
+    # CE 是本机最贵的一段（~1.4ms/token，见 docs/RERANK-PERF.md），送进去的条数另设上限：
+    # 30 条候选全部打分要 21s，而 RRF 顺序里第 10 名之后的块进 Top-5 的机会极小。
+    rerank_pool = pool[: max(top_k, s.rerank_candidates)]
     rerank_inputs = []
-    for cid, _rrf in pool:
+    for cid, _rrf in rerank_pool:
         item = idx.items[cid]
         rerank_inputs.append((cid, item.text))
     if rerank and rerank_inputs:
