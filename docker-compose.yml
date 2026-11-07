@@ -1,0 +1,73 @@
+# 生产形态：Postgres(pgvector) + OpenSearch + MinIO + Redis
+# 说明：本仓库默认（且 CI 验证过）的路径是 dev 后端 SQLite + 进程内索引；
+# 这个 compose 面向"上真实基础设施"的部署，本机 Windows 无 Docker，未实跑验证。
+# 上线前替换所有 changeme 口令，LLM 变量放同名环境变量或 .env。
+version: "3.9"
+
+services:
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DOCUMIND_ENV: prod
+      DOCUMIND_DATABASE_URL: postgresql+asyncpg://documind:${DOCUMIND_PG_PASSWORD}@postgres:5432/documind
+      DOCUMIND_OPENSEARCH_URL: http://opensearch:9200
+      DOCUMIND_MINIO_ENDPOINT: minio:9000
+      DOCUMIND_MINIO_ACCESS_KEY: changeme-s3
+      DOCUMIND_MINIO_SECRET_KEY: DOCUMIND_MINIO_SECRET_KEY 环境变量
+      DOCUMIND_REDIS_URL: redis://redis:6379/0
+      DOCUMIND_LLM_BASE_URL: ${DOCUMIND_LLM_BASE_URL}
+      DOCUMIND_LLM_API_KEY: ${DOCUMIND_LLM_API_KEY}
+      DOCUMIND_LLM_MODEL: ${DOCUMIND_LLM_MODEL}
+      DOCUMIND_ADMIN_TOKEN: ${DOCUMIND_ADMIN_TOKEN}
+      DOCUMIND_SESSION_SECRET: ${DOCUMIND_SESSION_SECRET}
+    depends_on:
+      - postgres
+      - opensearch
+      - minio
+      - redis
+
+  web:
+    build: ./web
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_BASE: http://api:8080
+    depends_on:
+      - api
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: documind
+      POSTGRES_PASSWORD: ${DOCU…WORD}
+      POSTGRES_DB: documind
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  opensearch:
+    image: opensearchproject/opensearch:2
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - osdata:/usr/share/opensearch/data
+
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: changeme-s3
+      MINIO_ROOT_PASSWORD: ${DOCU…RET}
+    volumes:
+      - miniodata:/data
+
+  redis:
+    image: redis:7-alpine
+
+volumes:
+  pgdata:
+  osdata:
+  miniodata:

@@ -17,7 +17,18 @@ export DOCUMIND_LLM_MODEL=<aigate 路由到的模型名>
 uv run documind ask "公司注册资本是多少？"
 ```
 
-## 这条链路证明了什么
+## 本机验证状态（2026-11-07）
+
+| 断言 | 状态 | 证据 |
+|---|---|---|
+| 网关鉴权生效 | 已验证 | 无 key 调 `/v1/models` → 401；带签发的 key → 200 并列出路由 |
+| 可由应用侧签发 dev key | 已验证 | `POST /admin/v1/keys` → 201，明文只落 `data/aigate.key`（49 字符，未打印） |
+| 路由可指向自建 OpenAI 兼容端点 | 已配置，待复跑 | `scripts/use_provider.py vllm qwen-cn/qwen3.8-flash --route chat-default` 写库成功；当时上游返回失败，网关按设计**降级到 mock-alt 并返回 200 + `degraded=true`**（降级路径本身是项目三的核心能力，这里算是被现场证明了） |
+| DocuMind 全链路走 AIGate | 未完成 | AIGate 仓库此刻正被另一处改动（`src/aigate/config.py` 有未提交的缩进错误），等服务恢复后重跑本节第 3 步 |
+
+> 这一行必须留着：**没跑完的就不写"已验证"**。恢复后重跑，成功再把表格改绿。
+
+## 这条链路设计上证明了什么
 
 | 断言 | 证据 |
 |---|---|

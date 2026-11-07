@@ -57,3 +57,22 @@ cd web && npm install && npm run dev
 - docling 解析器是可选适配器，默认走 pypdf（保留精确字符偏移，便于 span 高亮）。扫描件 OCR 未接。
 - Langfuse 未配置 key 时 trace 落本地 JSONL，字段与 Langfuse 对齐。
 - 表格问答、增量索引、多租户在 P1。
+- 语料只有 3 份上市公司章程（166 页公开文件），切块结论不外推到合同/代码/工单。
+- `docker-compose.yml` 面向生产形态，本机 Windows 无 Docker，**未实跑验证**；CI 走的是 dev 后端。
+- 评测集是 LLM 合成 + 人工抽检，不是真实用户日志；judge 与被测同模型，存在自评偏差。
+
+## Roadmap
+
+| 阶段 | 内容 | 判断"该做"的信号 |
+|---|---|---|
+| P1 | 答案自检重试默认开启 + 反馈回流（点赞/纠错进评测集） | 用户开始真实使用 |
+| P1 | 表格/图表问答（换 docling 或接 table transformer） | 语料里出现表格类问题 |
+| P1 | 增量索引（sha256 变更 + 文档级重建） | 文档数 > 1 万页或日更 |
+| P2 | GraphRAG：多跳关系问题（"A 条款引用的 B 条款是否被修订过"） | 比较型/流程型问题占比上升 |
+| P2 | 按部门多租户（tenant_id 进 ACL 与索引分片） | 第二个部门要用 |
+
+## 一键验收
+
+```bash
+bash scripts/verify.sh      # ruff + pytest + 检索门禁（离线，不下载模型）
+```
