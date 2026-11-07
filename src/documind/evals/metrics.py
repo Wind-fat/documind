@@ -7,14 +7,15 @@
 - Answer Relevancy：回答是否切题（judge 0/1，不再用 embedding 相似度凑数）
 - 拒答准确率：无答案问题上拒答的比例（宁拒不答的代价由这个数兑现）
 - 误拒率：有答案问题上被拒的比例
-- 引用有效率：引用能定位到页内 span 且 quote 在原文里逐字存在的比例
+- 引用有效率：citation 的 (page_start,char_start,page_end,char_end) 能切出原文，
+  且**归一化后的整句** quote 出现在这段切片里（不是只比前 20 字/前缀）
 """
 
 from __future__ import annotations
 
 import re
 
-from ..generate import Answer
+from ..generate import Answer, Citation
 from ..llm import LLMClient, parse_json
 from ..retrieve import RetrievalResult
 
@@ -83,6 +84,36 @@ async def judge_answer(llm: LLMClient, case: dict, ans: Answer, retrieval: Retri
     }
 
 
+def _cited_span_text(c: Citation, page_texts: dict[tuple[str, int], str]) -> str | None:
+    """按 citation 自己的页区间与字符偏移切出原文；越界/缺页返回 None。
+
+    单页 citation 就是 page[char_start:char_end]。跨页 citation 的 char_end 是
+    page_end 页内偏移：首页取 char_start 到页尾、中间页整页、末页取 0:char_end。
+    """
+    if c.page_start == c.page_end:
+        page = page_texts.get((c.doc_id, c.page_start), "")
+        if not page or not (0 <= c.char_start <= c.char_end <= len(page)):
+            return None
+        return page[c.char_start : c.char_end]
+
+    if c.page_start > c.page_end:
+        return None
+    start = page_texts.get((c.doc_id, c.page_start), "")
+    end = page_texts.get((c.doc_id, c.page_end), "")
+    if not start or not end:
+        return None
+    if not (0 <= c.char_start <= len(start) and 0 <= c.char_end <= len(end)):
+        return None
+    parts = [start[c.char_start :]]
+    for page in range(c.page_start + 1, c.page_end):
+        middle = page_texts.get((c.doc_id, page), "")
+        if not middle:
+            return None
+        parts.append(middle)
+    parts.append(end[: c.char_end])
+    return "".join(parts)
+
+
 def citation_validity(ans: Answer, page_texts: dict[tuple[str, int], str]) -> float:
     if ans.refused:
         return 1.0
@@ -90,10 +121,13 @@ def citation_validity(ans: Answer, page_texts: dict[tuple[str, int], str]) -> fl
         return 0.0
     ok = 0
     for c in ans.citations:
-        page = page_texts.get((c.doc_id, c.page_start), "")
-        if not page:
+        quote = _norm(c.quote)
+        if not quote:
             continue
-        if _norm(c.quote)[:20] and _norm(c.quote)[:20] in _norm(page):
+        span = _cited_span_text(c, page_texts)
+        if span is None:
+            continue
+        if quote in _norm(span):
             ok += 1
     return ok / len(ans.citations)
 

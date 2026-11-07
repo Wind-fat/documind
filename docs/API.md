@@ -46,7 +46,7 @@
 ```json
 {"doc_id":"a1b2","page":7,"text":"第四章 股份\n第一条 ..."}
 ```
-页文本是后端解析后的规范化文本，citation 的 char_start/char_end 就是这段文本里的偏移。
+页文本是后端解析后的规范化文本，citation 的 char_start/char_end 就是这段文本里的偏移；跨页 citation（page_start != page_end）的 char_end 是 page_end 页内偏移，不要只拿起始页切片。
 
 ## GET /documents/{doc_id}/outline
 ```json
@@ -99,8 +99,9 @@ fields: `file`, `acl_roles`（JSON 字符串，如 `["all"]` 或 `["finance","ad
 {
   "text":"公司注册资本为人民币438,847,974元 [1]。",
   "citations":[{"ref":1,"doc_id":"a1b2","doc_title":"公司章程","chunk_id":"c9",
-    "page_start":2,"char_start":96,"page_end":2,"char_end":140,
-    "quote":"第六条 公司注册资本为人民币438,847,974元。","section_path":"第一章 总则"}],
+      "page_start":2,"char_start":96,"page_end":2,"char_end":140,
+      "quote":"第六条 公司注册资本为人民币438,847,974元。","section_path":"第一章 总则",
+      "span_source":"anchored"}],
   "refused":false,"reason":"","rewritten_query":"",
   "latency_ms":1840,"cost_usd":0.000021,"prompt_tokens":1200,"completion_tokens":80,
   "retrieval_ms":210,"generation_ms":1500,"top_score":2.31,
@@ -110,6 +111,7 @@ fields: `file`, `acl_roles`（JSON 字符串，如 `["all"]` 或 `["finance","ad
 }
 ```
 拒答时：`refused=true`、`citations=[]`、`text` 为"文档中未找到相关条款。"，`reason` 说明原因（阈值/无引用/资料不足）。
+`span_source`：`anchored`=整句在被引页内命中；`fallback_page`=被引页没有、退到同文档其它页（必须留痕）；`chunk`=整句找不到，退回块自身 span。
 
 Hit 结构（evidence 卡片的数据源）：
 ```json

@@ -40,8 +40,7 @@ flowchart LR
   R -.-> P[(Postgres+pgvector<br/>OpenSearch / MinIO<br/>prod 适配器)]
 ```
 
-数据层在 dev 用 SQLite + 进程内索引（clone 下来零依赖可跑），检索/存储/向量三处都是接口，
-换 Postgres+pgvector / OpenSearch / MinIO 只改配置。见 `docs/adr/`。
+数据层在 dev 用 SQLite + 进程内索引（clone 下来零依赖可跑）；检索口径有端口，但换 Postgres+pgvector / OpenSearch 仍需改 4 处（清单见 `docs/adr/0002-hybrid-retrieval.md`），不是只改配置。见 `docs/adr/`。
 
 ## 快速开始
 
@@ -77,11 +76,13 @@ cd web && npm install && npm run dev
 | P95 延迟(ms)* | 150813 | 120718 | 127578 | 73507 |
 | 单问成本($) | 0.0009 | 0.0010 | 0.0011 | 0.0012 |
 
+> 该表生成于 focus 重排改造之前（head@512×30）；structure 列已用 focus@256×10 重跑：Recall@5 与 Context Recall 均为 0.950（19/20），见 `docs/RERANK-PERF.md §4`。
+
 **一句话结论：切块策略几乎不影响 Recall@5（0.90 vs 0.95，20 题里只差 1 题），
 它影响的是"喂给模型的上下文完不完整"和"答案有没有原文依据"——Context Recall 0.75 → 0.95、
 Faithfulness 0.834 → 0.938，以及按页切块把条款切断后那 15% 的误拒。**
 
-\* 延迟是在 3 worker × 2 并发的评测负载下测的，含本地 rerank 排队；单问串行约 50s，其中本地重排约 20s。
+\* 延迟是在 3 worker × 2 并发的评测负载下测的，含本地 rerank 排队；focus@256×10 实测单问串行约 9.5s、重排 P50 2.7s（`docs/RERANK-PERF.md §5`）。
 完整的逐题明细、拒答阈值 P-R 曲线和口径说明见 `evals/reports/ablation.md`。
 
 复现：
@@ -98,7 +99,7 @@ Faithfulness 0.834 → 0.938，以及按页切块把条款切断后那 15% 的�
 ## 已知限制
 
 - dev 后端是 SQLite + 进程内 BM25/向量索引，单机、单进程；多副本需换 OpenSearch/pgvector（接口已留）。
-- docling 解析器是可选适配器，默认走 pypdf（保留精确字符偏移，便于 span 高亮）。扫描件 OCR 未接。
+- DoclingParser 存在但未接线（`DOCUMIND_PARSER=docling` 会在配置校验阶段直接报错），默认走 pypdf（保留精确字符偏移，便于 span 高亮）。扫描件 OCR 未接。
 - Langfuse 未配置 key 时 trace 落本地 JSONL，字段与 Langfuse 对齐。
 - 表格问答、增量索引、多租户在 P1。
 - 语料只有 3 份上市公司章程（166 页公开文件），切块结论不外推到合同/代码/工单。

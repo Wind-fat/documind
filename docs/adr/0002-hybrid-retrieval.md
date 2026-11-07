@@ -11,7 +11,7 @@
 
 1. **两路召回**：BM25（中文按字符 bigram 切分）+ 向量（bge-small-zh-v1.5, 512 维），各取 Top-30。
 2. **RRF 融合**（k=60）：只用名次不用分数——BM25 分数与 cosine 相似度量纲不同，归一化会引入新的偏差。
-3. **cross-encoder 重排**（bge-reranker-base）：从融合后的 30 条里取 Top-5 喂模型。
+3. **cross-encoder 重排**（bge-reranker-base）：从融合后的前 10 条（`rerank_candidates=10`，不低于 top_k）里取 Top-5 喂模型。
 
 ## 端口在哪、切换要改哪几处（2026-11 复核后修订）
 
@@ -39,7 +39,7 @@ FTS5 的 unicode61 分词器把连续中文视为一个 token，`"年假可以�
 
 RRF 保序但不判相关性：融合后的第 7-12 位经常是"字面对得上但答非所问"的块。cross-encoder 逐对打分，
 在评测集上把 Recall@5 从 RRF-only 的水平抬上去（见 `evals/reports/ablation.md` 的对照）。
-代价是延迟：Top-30 重排在 CPU 上约 300-600ms，这是 P95 延迟的主要来源。
+代价是延迟：focus@256×10 实测重排 P50 2 711 ms、`retrieve()` P50 2 821 ms（`docs/RERANK-PERF.md` §4/§5）。
 
 ## 放弃了什么
 

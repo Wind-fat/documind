@@ -81,14 +81,52 @@ def test_calibrate_threshold_respects_false_refusal_budget():
 
 
 def test_citation_validity_needs_quote_in_page():
-    page_texts = {("d1", 3): "第三条 员工每年享有带薪年假五天。"}
+    page = "第三条 员工每年享有带薪年假五天。"
+    page_texts = {("d1", 3): page}
+    start = page.find("员工每年")
     good = Answer(
         text="五天 [1]",
-        citations=[Citation(1, "d1", "制度", "c1", 3, 0, 10, 20, "员工每年享有带薪年假五天")],
+        citations=[Citation(1, "d1", "制度", "c1", 3, start, 3, start + 12, "员工每年享有带薪年假五天")],
     )
     bad = Answer(
         text="可以折现 [1]",
-        citations=[Citation(1, "d1", "制度", "c1", 3, 0, 10, 20, "年假可以折现")],
+        citations=[Citation(1, "d1", "制度", "c1", 3, start, 3, start + 6, "年假可以折现")],
     )
     assert citation_validity(good, page_texts) == 1.0
     assert citation_validity(bad, page_texts) == 0.0
+
+
+def test_citation_validity_rejects_fabricated_tail():
+    """Q3：只命中前 20 字不算有效引用，整句都要在 span 里逐字存在。"""
+    quote = "员工每年享有带薪年假五天，工作满十年者享有十天"
+    page = f"第三条 {quote}。"
+    start = page.find(quote)
+    page_texts = {("d1", 3): page}
+    real = Answer(
+        text="五天 [1]",
+        citations=[Citation(1, "d1", "制度", "c1", 3, start, 3, start + len(quote), quote)],
+    )
+    fabricated = quote[:25] + "，未休完可以按三倍工资折现"
+    fake = Answer(
+        text="可折现 [1]",
+        citations=[Citation(1, "d1", "制度", "c1", 3, start, 3, start + len(quote), fabricated)],
+    )
+    assert citation_validity(real, page_texts) == 1.0
+    assert citation_validity(fake, page_texts) == 0.0, "前半句命中、后半句编造，指标仍是绿的就是假绿"
+
+
+def test_citation_validity_checks_span_bounds_and_cross_page():
+    page1 = "甲" * 20 + "跨页引用的前半段"
+    page2 = "后半段到第二页结束" + "乙" * 10
+    page_texts = {("d1", 1): page1, ("d1", 2): page2}
+    quote = page1[20:] + page2[:10]
+    cross = Answer(
+        text="跨页 [1]",
+        citations=[Citation(1, "d1", "制度", "c1", 1, 20, 2, 10, quote)],
+    )
+    out_of_bounds = Answer(
+        text="越界 [1]",
+        citations=[Citation(1, "d1", "制度", "c1", 1, 20, 1, len(page1) + 5, quote)],
+    )
+    assert citation_validity(cross, page_texts) == 1.0
+    assert citation_validity(out_of_bounds, page_texts) == 0.0

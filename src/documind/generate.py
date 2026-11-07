@@ -43,6 +43,9 @@ class Citation:
     char_end: int
     quote: str
     section_path: str = ""
+    # span 是怎么来的：anchored=在被引页内命中；fallback_page=被引页没有、退到同文档其它页；
+    # chunk=整句在文档里找不到，退回块自身 span。退页不允许静默（Q3 审计）。
+    span_source: str = "chunk"
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -92,23 +95,67 @@ def _norm(s: str) -> str:
     return re.sub(r"\s+", "", s)
 
 
+def _norm_index(text: str) -> tuple[str, list[int]]:
+    """去空白后的文本 + 每个保留字符在原文里的下标。
+
+    归一化只能用于比较，不能直接拿来当偏移：去掉空白后下标会整体前移，
+    所以这里同时维护映射，命中后再换算回页内原始字符位置。
+    """
+    chars: list[str] = []
+    index: list[int] = []
+    for i, ch in enumerate(text):
+        if ch.isspace():
+            continue
+        chars.append(ch)
+        index.append(i)
+    return "".join(chars), index
+
+
+def _find_in_page(text: str, quote: str) -> tuple[int, int] | None:
+    """在一页原文里找**整句** quote：先按原文精确找，再按去空白后的文本找。"""
+    raw = text.find(quote)
+    if raw >= 0:
+        return raw, raw + len(quote)
+    norm_text, index = _norm_index(text)
+    needle = _norm(quote)
+    if not needle:
+        return None
+    pos = norm_text.find(needle)
+    if pos < 0:
+        return None
+    return index[pos], index[pos + len(needle) - 1] + 1
+
+
+@dataclass(frozen=True, slots=True)
+class QuoteSpan:
+    page: int
+    char_start: int
+    char_end: int
+    source: str  # anchored | fallback_page
+
+
 def locate_quote(
     hit: Hit, quote: str, page_texts: dict[tuple[str, int], str] | None
-) -> tuple[int, int, int] | None:
+) -> QuoteSpan | None:
     """把模型给的 quote 定位回"第几页、页内哪个字符区间"。
 
-    必须真的在该页原文里找到，找不到就返回 None（退回整块 span），
+    锚点是被引块自己声明的页（跨页块是 page_start..page_end）：只有这些页里
+    都找不到整句时，才允许退到同文档的其它页，并返回 source="fallback_page"
+    —— 退页必须在 Citation/调试信息里留痕，不能静默。
+    整份文档都找不到则返回 None（调用方退回块 span），
     绝不能返回 (0, len) 这种"从页首开始高亮"的假定位——那是把错误藏起来。
     """
-    if not quote or not page_texts:
+    needle = (quote or "").strip()
+    if not needle or not page_texts:
         return None
-    needle = quote.strip()[:40]
-    for (doc_id, page), text in sorted(page_texts.items(), key=lambda kv: kv[0][1]):
-        if doc_id != hit.doc_id:
-            continue
-        raw = text.find(needle)
-        if raw >= 0:
-            return (page, raw, raw + len(needle))
+    all_pages = sorted(page for (doc_id, page) in page_texts if doc_id == hit.doc_id)
+    cited = [p for p in range(hit.page_start, hit.page_end + 1) if (hit.doc_id, p) in page_texts]
+    other = [p for p in all_pages if p not in cited]
+    for pages, source in ((cited, "anchored"), (other, "fallback_page")):
+        for page in pages:
+            found = _find_in_page(page_texts[(hit.doc_id, page)], needle)
+            if found is not None:
+                return QuoteSpan(page, found[0], found[1], source)
     return None
 
 
@@ -246,7 +293,7 @@ async def _finalize(
         retrieval_ms=retrieval.latency_ms,
         generation_ms=gen_ms,
         top_score=retrieval.top_score,
-        debug={"contexts": len(prompt.mapping)},
+        debug={"contexts": len(prompt.mapping), "span_sources": _span_source_counts(cites)},
     )
 
     if selfcheck and not ans.refused:
@@ -301,6 +348,7 @@ async def _finalize(
                 if c2 and not d2.get("not_found"):
                     ans.text = str(d2.get("answer") or ans.text)
                     ans.citations = c2
+                    ans.debug["span_sources"] = _span_source_counts(c2)
                     ans.reason = ""
                     ans.refused = False
                     ans.selfcheck["retried"] = True
@@ -487,27 +535,44 @@ def _validate_citations(
             continue
         hit = mapping[ref]
         quote = str(c.get("quote") or "").strip()
-        # quote 必须在上下文原文里逐字出现，否则这条引用无效（防编造原文）
-        if quote and _norm(quote)[:40] not in _norm(hit.text):
+        # quote 必须在上下文原文里**整句**逐字出现，否则这条引用无效（防编造原文）。
+        # 只比前 40 字会放过"前半句照抄、后半句编造"的引用（Q3 审计）。
+        if quote and _norm(quote) not in _norm(hit.text):
             continue
         span = locate_quote(hit, quote, page_texts) if quote else None
-        if span:
-            page, cs, ce = span
+        if span is not None:
+            page_start, char_start, char_end = span.page, span.char_start, span.char_end
+            page_end = span.page
+            span_source = span.source
         else:
-            page, cs, ce = hit.page_start, hit.char_start, hit.char_end
+            # 定位不到就退回块自身 span。跨页块必须同时保留 page_start 与 page_end：
+            # 把 page_end 塌成 page_start 会得到 char_start > char_end 的倒区间（Q3 审计）。
+            page_start, char_start = hit.page_start, hit.char_start
+            page_end, char_end = hit.page_end, hit.char_end
+            span_source = "chunk"
+            if page_start == page_end and char_end < char_start:
+                char_end = char_start
         out.append(
             Citation(
                 ref=ref,
                 doc_id=hit.doc_id,
                 doc_title=hit.doc_title,
                 chunk_id=hit.chunk_id,
-                page_start=page,
-                char_start=cs,
-                page_end=page,
-                char_end=ce,
+                page_start=page_start,
+                char_start=char_start,
+                page_end=page_end,
+                char_end=char_end,
                 quote=quote or hit.text[:60],
                 section_path=hit.section_path,
+                span_source=span_source,
             )
         )
         seen.add(ref)
     return out
+
+
+def _span_source_counts(cites: list[Citation]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for c in cites:
+        counts[c.span_source] = counts.get(c.span_source, 0) + 1
+    return counts

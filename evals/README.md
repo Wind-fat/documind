@@ -38,7 +38,7 @@ asyncio.run(m())"
 - **Answer Relevancy**：是否正面回答问题（judge 0/1）
 - **拒答准确率**：20 条无答案问题里拒答的比例
 - **误拒率**：可答问题里被拒的比例
-- **引用有效率**：引用能定位到 span 且 quote 在原文里逐字存在
+- **引用有效率**：citation 的 (page_start,char_start,page_end,char_end) 能从 pages 原文切出 span，且**归一化后的整句** quote 在这段切片里逐字存在（不再只比前 20 字）
 - **P50/P95 延迟**、**单问成本**
 
 ## 跑一次

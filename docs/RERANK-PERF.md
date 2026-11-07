@@ -160,6 +160,8 @@ gold 句常常在第 256 字之后。`focus` 先按句切、取与问题字面�
 跑 `/query`，再拿 `citations[]` 的 `page_start/char_start/page_end/char_end` 去 pages 表原文里
 切一刀，要求 `page[char_start:char_end]` 严格是 `quote` 的前缀（`locate_quote` 找的是前 40 字）。
 
+> 该轮跑的是旧版 `citation_validity`（只比 quote 前 20 字）与旧版 `locate_quote`（全文档找前 40 字）；现已改为整句 + span 校验，下表的 `citation_validity` 0.875/1.000 不能与新口径直接比较。
+
 两次跑的是**同一份代码**，只有三个旋钮不同（改前那组就是 `ea63b8a` 之前的默认值）：
 
 ```bash
