@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -33,6 +34,21 @@ class LLMReply:
     usage: Usage = field(default_factory=Usage)
 
 
+@dataclass(slots=True)
+class StreamMeta:
+    """一次流式调用的旁路观测：用量、首 token 耗时、块数。
+
+    这些字段是给 /query/stream 的 answer 事件和 trace 用的——没有它们就无法区分
+    "真流式"与"等全量再一次性吐出来"（P1-05）。
+    """
+
+    usage: Usage = field(default_factory=Usage)
+    chunks: int = 0
+    ttft_ms: int = -1
+    usage_available: bool = False
+    finished: bool = False
+
+
 class LLMError(RuntimeError):
     pass
 
@@ -55,15 +71,14 @@ class LLMClient:
             8,
         )
 
-    async def chat(
+    def _payload(
         self,
         messages: list[dict],
         *,
-        json_mode: bool = False,
-        temperature: float | None = None,
-        max_tokens: int | None = None,
-        allow_mock: bool = True,
-    ) -> LLMReply:
+        json_mode: bool,
+        temperature: float | None,
+        max_tokens: int | None,
+    ) -> dict:
         s = self.s
         payload: dict = {
             "model": s.llm_model,
@@ -74,6 +89,21 @@ class LLMClient:
             payload["response_format"] = {"type": "json_object"}
         if max_tokens:
             payload["max_tokens"] = max_tokens
+        return payload
+
+    async def chat(
+        self,
+        messages: list[dict],
+        *,
+        json_mode: bool = False,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        allow_mock: bool = True,
+    ) -> LLMReply:
+        s = self.s
+        payload = self._payload(
+            messages, json_mode=json_mode, temperature=temperature, max_tokens=max_tokens
+        )
         t0 = time.perf_counter()
         try:
             r = await self._http().post(
@@ -99,6 +129,87 @@ class LLMClient:
         )
         record_trace("llm", {"model": usage.model, "prompt_tokens": pt, "completion_tokens": ct, "ms": usage.latency_ms})
         return LLMReply(text=content, usage=usage)
+
+    async def chat_stream(
+        self,
+        messages: list[dict],
+        *,
+        json_mode: bool = False,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+        meta: StreamMeta | None = None,
+    ) -> AsyncIterator[str]:
+        """OpenAI 兼容 SSE：逐块 yield `delta.content`（真流式，P1-05）。
+
+        与 `chat` 的差别只有传输方式：同样的 payload + `stream: true`。
+        `reasoning_content` 不当答案吐出来（那是模型的思考过程，不是给用户的正文）。
+
+        失败一律抛 `LLMError`（不静默 mock）：调用方要么降级到非流式，要么把错误
+        作为事件发出去。流式静默变"一次性全量"就是 P1-05 要修的那种假象。
+        """
+        s = self.s
+        meta = meta or StreamMeta()
+        payload = self._payload(
+            messages, json_mode=json_mode, temperature=temperature, max_tokens=max_tokens
+        )
+        payload["stream"] = True
+        t0 = time.perf_counter()
+        try:
+            async with self._http().stream(
+                "POST",
+                f"{s.llm_base_url.rstrip('/')}/chat/completions",
+                headers={"Authorization": f"Bearer {s.llm_api_key}"},
+                json=payload,
+            ) as r:
+                if r.status_code >= 400:
+                    body = (await r.aread()).decode("utf-8", "replace").strip()[:300]
+                    raise LLMError(f"上游拒绝流式请求（HTTP {r.status_code}）：{body}")
+                async for line in r.aiter_lines():
+                    line = line.strip()
+                    if not line or not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if data == "[DONE]":
+                        break
+                    try:
+                        obj = json.loads(data)
+                    except json.JSONDecodeError:
+                        continue
+                    u = obj.get("usage") or {}
+                    if u:
+                        pt, ct = int(u.get("prompt_tokens", 0)), int(u.get("completion_tokens", 0))
+                        meta.usage = Usage(
+                            model=obj.get("model", s.llm_model),
+                            prompt_tokens=pt,
+                            completion_tokens=ct,
+                            cost_usd=self.cost(pt, ct),
+                            latency_ms=int((time.perf_counter() - t0) * 1000),
+                        )
+                        meta.usage_available = True
+                    for ch in obj.get("choices") or []:
+                        piece = (ch.get("delta") or {}).get("content") or ""
+                        if not piece:
+                            continue
+                        if meta.ttft_ms < 0:
+                            meta.ttft_ms = int((time.perf_counter() - t0) * 1000)
+                        meta.chunks += 1
+                        yield piece
+        except LLMError:
+            raise
+        except Exception as exc:
+            raise LLMError(f"流式调用失败: {exc}") from exc
+        meta.finished = True
+        meta.usage.latency_ms = int((time.perf_counter() - t0) * 1000)
+        record_trace(
+            "llm_stream",
+            {
+                "model": meta.usage.model or s.llm_model,
+                "chunks": meta.chunks,
+                "ttft_ms": meta.ttft_ms,
+                "ms": meta.usage.latency_ms,
+                "usage_available": meta.usage_available,
+            },
+        )
 
     async def aclose(self) -> None:
         if self._client is not None:

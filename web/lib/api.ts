@@ -293,6 +293,8 @@ export function askQuestion(input: QueryInput, signal?: AbortSignal): Promise<An
 export interface StreamHandlers {
   /** 检索完成：先渲染证据卡（后端会在生成答案之前发出）。 */
   onEvidence?: (hits: Hit[]) => void;
+  /** 答案正文的增量（草稿）：后端逐块转发，`answer` 到达后应被覆盖。 */
+  onToken?: (text: string) => void;
   /** 答案到达。 */
   onAnswer?: (answer: Answer) => void;
   /** 其它/未知事件，便于调试。 */
@@ -385,6 +387,12 @@ export async function streamQuery(input: StreamInput, handlers: StreamHandlers):
     }
     if (evt.event === "evidence") {
       if (isHitArray(parsed)) handlers.onEvidence?.(parsed);
+      return;
+    }
+    if (evt.event === "token") {
+      // 草稿：answer 事件到达后由调用方覆盖（后端可能拒答或自检重写）
+      const text = (parsed as { text?: unknown })?.text;
+      if (typeof text === "string") handlers.onToken?.(text);
       return;
     }
     if (evt.event === "answer") {

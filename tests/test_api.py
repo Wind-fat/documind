@@ -128,9 +128,22 @@ async def test_stream_events(client, loaded, monkeypatch):
         async def chat(self, messages, **kwargs):
             return LLMReply(text=json.dumps({"answer": "五天 [1]", "citations": [{"ref": 1, "quote": "员工每年享有带薪年假五天"}]}), usage=Usage(model="fake"))
 
+        async def chat_stream(self, messages, *, json_mode=False, max_tokens=None, meta=None):
+            # 单块流：只验事件名与载荷契约（真流式的时序在 test_stream_and_threshold.py）
+            yield json.dumps(
+                {
+                    "answer": "五天 [1]",
+                    "citations": [{"ref": 1, "quote": "员工每年享有带薪年假五天"}],
+                    "not_found": False,
+                },
+                ensure_ascii=False,
+            )
+
     monkeypatch.setattr(pipeline, "get_llm", lambda: Fake())
     async with client.stream(
-        "GET", "/query/stream", params={"question": "年假有几天"}, headers={"X-User": "alice"}
+        "GET", "/query/stream", params={"question": "年假有几天", "selfcheck": "false"}, headers={"X-User": "alice"}
     ) as resp:
         text = "".join([chunk async for chunk in resp.aiter_text()])
     assert "event: evidence" in text and "event: answer" in text
+    # 向后兼容：evidence 仍是 Hit 数组，answer 仍是完整 Answer
+    assert '"chunk_id"' in text and '"refused"' in text

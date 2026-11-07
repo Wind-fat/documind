@@ -11,10 +11,24 @@
 {"status":"ok","documents":3,"chunks":912,"embedder":"BAAI/bge-small-zh-v1.5","embed_dim":512,
  "embed_space":"BAAI/bge-small-zh-v1.5@512","embedder_backend":"bge",
  "degraded":[],"degraded_reason":"","index_version":1,
- "llm":{"base_url":"http://127.0.0.1:3425/v1","model":"qwen-cn/qwen3.8-flash"}}
+ "llm":{"base_url":"http://127.0.0.1:3425/v1","model":"qwen-cn/qwen3.8-flash"},
+ "refusal_threshold":{"reranker":"BAAI/bge-reranker-base","value":-4.25,"source":"calibrated",
+   "calibrated":-4.25,"calibrated_run":"a1b2c3","calibrated_at":"2026-11-07T12:00:00+00:00",
+   "mismatch":false,"warning":""},
+ "streaming":{"endpoint":"/query/stream","events":["evidence","token","answer"]}}
 ```
 `degraded` 非空表示发生了自动降级（目前只有 `embedder`：bge 拉不下来退到 hash），原因在 `degraded_reason`。
 **别忽略这一项**：降级后检索质量会掉，而接口仍返回 200。
+
+`refusal_threshold` 是**当前实际生效**的拒答阈值与它的来源（P1-03）：
+
+| `source` | 含义 |
+|---|---|
+| `env` | `DOCUMIND_REFUSAL_THRESHOLD` 显式覆盖（优先）。与最近标定值不一致时 `mismatch=true`、`warning` 写明两者与 eval_run id |
+| `calibrated` | 该 reranker 最近一次评测标定写回的 `eval_runs.recommended_threshold` |
+| `builtin` | 从未标定过，用的是内置占位（`warning` 会提示"跑一次 documind eval"） |
+
+阈值按 `reranker.name` 分桶（`lexical` / `BAAI/bge-reranker-base` 各一套），换重排后端不会静默沿用另一个域的数值。
 
 ## GET /documents
 ```json
@@ -80,21 +94,42 @@ Hit 结构（evidence 卡片的数据源）：
  "score":2.31,"bm25_rank":0,"vec_rank":2,"rrf":0.032}
 ```
 
-## GET /query/stream?question=...&strategy=structure&conversation_id=...
-SSE，两个事件：
+## GET /query/stream?question=...&strategy=structure&conversation_id=...&selfcheck=false
+
+SSE，**真流式**（P1-05）：检索完成即发证据，答案正文逐块转发。事件顺序是契约：
+
 ```
 event: evidence
-data: [Hit, ...]
+data: [Hit, ...]                 ← 检索完成即发（之前没有任何模型调用）
+
+event: token
+data: {"text":"增量正文"}          ← 0..n 个，模型每吐一块转发一块
 
 event: answer
-data: {Answer}
+data: {Answer}                   ← 权威结果，字段与 POST /query 完全一致
+```
+
+- `token` 是**草稿**：引用尚未逐字校验、自检未跑；`answer` 到达后前端应以它为准（可能拒答或被重试改写）。
+- 向后兼容：`evidence` 仍是 Hit 数组、`answer` 仍是完整 Answer；`token` 是新增事件，旧客户端忽略未知事件即可。
+- 响应头带 `Cache-Control: no-cache, no-transform`、`X-Accel-Buffering: no`，避免代理层把它重新攒成一次性响应。
+- 上游不支持流式时服务端自动退回一次非流式调用，事件顺序不变，原因写在
+  `answer.debug.streaming.degraded`（非空即代表降级）。
+- 延迟口径与实测数字（含真网关的前后对比）见 `docs/STREAM.md`。
+
+`answer.debug.streaming`：
+```json
+{"mode":"sse","chunks":18,"ttft_ms":120,"token_events":17,"degraded":"","degraded_reason":""}
 ```
 
 ## GET /evals/runs
 ```json
 [{"id":"r1","strategy":"structure","dataset":"default","n_cases":100,
-  "metrics":{"recall_at_5":0.79,"faithfulness":0.92,...},"created_at":"...","report_path":"..."}]
+  "metrics":{"recall_at_5":0.79,"faithfulness":0.92,...},"created_at":"...","report_path":"...",
+  "reranker":"BAAI/bge-reranker-base","recommended_threshold":-4.25}]
 ```
+`reranker` + `recommended_threshold` 是标定回写（P1-03）：阈值按 `reranker.name` 分桶，
+`POST /evals/run` 结束时把推荐值落库，服务启动/检索时按当前 reranker 取最近一次。
+环境变量 `DOCUMIND_REFUSAL_THRESHOLD` 可显式覆盖（不一致会在 `/health.refusal_threshold.mismatch` 亮出）。
 
 ## POST /evals/run  (需 admin token)
 `{"dataset":"default","strategies":["fixed","semantic","structure","parent_child"],"limit":null}`

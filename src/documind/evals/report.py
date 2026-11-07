@@ -90,11 +90,17 @@ def _markdown(dataset: str, summary: dict, calibration: dict, embedder: dict) ->
             row = " | ".join(_fmt(summary[s].get(key), kind) for s in strategies)
         lines.append(f"| {label} | {row} |")
     rec = calibration["recommended"]
+    grid = calibration.get("grid") or {}
     lines += [
         "",
         "## 拒答阈值标定",
         "",
         calibration["rule"],
+        "",
+        f"reranker **{calibration.get('reranker') or '未记录'}** 专属阈值桶；"
+        f"网格 {grid.get('n', '?')} 点，覆盖 [{grid.get('min')}, {grid.get('max')}]"
+        f"（实际分数 [{grid.get('score_min')}, {grid.get('score_max')}] 两端各留 ±1）。"
+        "标定结果已写回 `eval_runs.recommended_threshold`，服务启动时按 reranker 读取。",
         "",
         f"推荐阈值 **top_score ≥ {rec['threshold']}**：此时无答案问题拒答率 {rec['refusal_accuracy']:.1%}、"
         f"有答案问题误拒率 {rec['false_refusal']:.1%}。",

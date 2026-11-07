@@ -91,3 +91,15 @@ def get_reranker() -> Reranker:
     except Exception as exc:  # pragma: no cover
         logging.getLogger(__name__).warning("cross-encoder 不可用，降级为词面重排: %s", exc)
         return LexicalReranker()
+
+
+def reranker_name() -> str:
+    """当前 reranker 的名字（阈值分桶的键），**不触发模型加载**。
+
+    /health 与启动日志要在模型还没预热时就能说清"阈值属于哪个后端"，
+    所以未实例化时按配置推断；一旦实例化（含降级）就以真实对象为准。
+    """
+    if get_reranker.cache_info().currsize:
+        return get_reranker().name
+    s = get_settings()
+    return "lexical" if s.rerank_backend == "lexical" else s.rerank_model

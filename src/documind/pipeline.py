@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import time
@@ -17,11 +16,12 @@ from .config import get_settings
 from .db import Chunk as ChunkRow
 from .db import Conversation, Document, Message, Page
 from .embed import get_embedder
-from .generate import Answer, answer_question
+from .generate import Answer, AnswerStream, answer_question
 from .llm import get_llm
 from .parsing import parse_file
 from .query import classify_intent, rewrite_query
 from .retrieve import RetrievalResult, retrieve, store
+from .thresholds import ThresholdState, resolve_refusal_threshold
 
 
 def _sha256(path: Path) -> str:
@@ -165,6 +165,39 @@ async def _page_texts(session: AsyncSession, doc_ids: set[str] | str) -> dict[tu
     return {(doc_id, no): text for doc_id, no, text in rows}
 
 
+async def _prepare(
+    session: AsyncSession,
+    question: str,
+    *,
+    role: str,
+    strategy: str,
+    top_k: int | None,
+    conversation_id: str | None,
+    use_rewrite: bool,
+    llm,
+) -> tuple[str, RetrievalResult, dict[tuple[str, int], str], list[dict]]:
+    """检索前置的全部动作：历史 → 改写 → 检索 → 引用定位用页文本。
+
+    /query 与 /query/stream 共用这一条路径，否则两条路的检索行为迟早漂移。
+    """
+    history = await _history(session, conversation_id)
+    rewritten = question
+    if use_rewrite and history:
+        rewritten = await rewrite_query(question, history, llm)
+    retrieval: RetrievalResult = await retrieve(session, rewritten, role=role, strategy=strategy, top_k=top_k)
+    page_texts: dict[tuple[str, int], str] = {}
+    if retrieval.contexts:
+        page_texts = await _page_texts(session, {h.doc_id for h in retrieval.contexts})
+    return rewritten, retrieval, page_texts, history
+
+
+async def _threshold(session: AsyncSession) -> ThresholdState:
+    """当前 reranker 的生效拒答阈值（按 name 分桶，P1-03）。"""
+    from .rerank import get_reranker
+
+    return await resolve_refusal_threshold(session, get_reranker().name)
+
+
 async def ask(
     session: AsyncSession,
     question: str,
@@ -180,30 +213,31 @@ async def ask(
     s = get_settings()
     llm = get_llm()
     t0 = time.perf_counter()
-    history = await _history(session, conversation_id)
-
-    rewritten = question
-    if use_rewrite and history:
-        rewritten = await rewrite_query(question, history, llm)
-
-    retrieval: RetrievalResult = await retrieve(
-        session, rewritten, role=role, strategy=strategy, top_k=top_k
+    rewritten, retrieval, page_texts, history = await _prepare(
+        session,
+        question,
+        role=role,
+        strategy=strategy,
+        top_k=top_k,
+        conversation_id=conversation_id,
+        use_rewrite=use_rewrite,
+        llm=llm,
     )
-    page_texts: dict[tuple[str, int], str] = {}
-    if retrieval.contexts:
-        page_texts = await _page_texts(session, {h.doc_id for h in retrieval.contexts})
+    thr = await _threshold(session)
     ans = await answer_question(
-        rewritten, retrieval, llm, page_texts=page_texts, history=history, selfcheck=selfcheck
+        rewritten,
+        retrieval,
+        llm,
+        page_texts=page_texts,
+        history=history,
+        selfcheck=selfcheck,
+        threshold=thr.value,
+        reranker_name=thr.reranker,
     )
     ans.rewritten_query = rewritten if rewritten != question else ""
     ans.latency_ms = int((time.perf_counter() - t0) * 1000)
-    ans.debug |= {
-        "intent": classify_intent(rewritten),
-        "strategy": strategy,
-        "retrieval": retrieval.debug,
-        "candidates": retrieval.candidates,
-        "hits": [h.to_dict() for h in retrieval.hits],
-    }
+    ans.debug |= _debug_payload(rewritten, retrieval, strategy)
+    ans.debug["refusal_threshold"] = thr.to_dict()
 
     if conversation_id is None and persist:
         conv = Conversation(user_id=user_id or "anonymous")
@@ -211,27 +245,108 @@ async def ask(
         await session.flush()
         conversation_id = conv.id
     if persist:
-        session.add(Message(conversation_id=conversation_id, role="user", content=question))
-        session.add(
-            Message(
-                conversation_id=conversation_id,
-                role="assistant",
-                content=ans.text,
-                citations=json.dumps([c.to_dict() for c in ans.citations], ensure_ascii=False),
-                refused=ans.refused,
-                latency_ms=ans.latency_ms,
-                cost_usd=ans.cost_usd,
-            )
-        )
-        await session.commit()
+        await _persist_exchange(session, conversation_id, question, ans)
     ans.debug["conversation_id"] = conversation_id
     ans.debug.update({"total_ms": ans.latency_ms, "settings_topk": s.top_k})
     return ans
 
 
-async def stream_answer(session: AsyncSession, **kwargs):
-    """SSE 用：先吐检索事件（前端立刻画证据卡），再吐答案事件。"""
-    ans = await ask(session, **kwargs)
-    yield {"event": "evidence", "data": ans.debug.get("hits") or []}
+def _debug_payload(rewritten: str, retrieval: RetrievalResult, strategy: str) -> dict:
+    return {
+        "intent": classify_intent(rewritten),
+        "strategy": strategy,
+        "retrieval": retrieval.debug,
+        "candidates": retrieval.candidates,
+        "hits": [h.to_dict() for h in retrieval.hits],
+    }
+
+
+async def _persist_exchange(
+    session: AsyncSession, conversation_id: str | None, question: str, ans: Answer
+) -> None:
+    session.add(Message(conversation_id=conversation_id, role="user", content=question))
+    session.add(
+        Message(
+            conversation_id=conversation_id,
+            role="assistant",
+            content=ans.text,
+            citations=json.dumps([c.to_dict() for c in ans.citations], ensure_ascii=False),
+            refused=ans.refused,
+            latency_ms=ans.latency_ms,
+            cost_usd=ans.cost_usd,
+        )
+    )
+    await session.commit()
+
+
+async def stream_answer(
+    session: AsyncSession,
+    question: str,
+    role: str = "employee",
+    user_id: str | None = None,
+    conversation_id: str | None = None,
+    strategy: str = "structure",
+    top_k: int | None = None,
+    selfcheck: bool | None = None,
+    use_rewrite: bool = True,
+    persist: bool = True,
+):
+    """SSE 事件流：检索完成即发 evidence，随后逐块发 token，最后发 answer（P1-05）。
+
+    顺序是契约：`evidence` → 0..n × `token` → `answer`。
+    evidence 不等生成，token 不等全量——这两句就是"真流式"的定义，也是
+    docs/STREAM.md 里 TTFT 数字的来源。
+    """
+    s = get_settings()
+    llm = get_llm()
+    t0 = time.perf_counter()
+    rewritten, retrieval, page_texts, history = await _prepare(
+        session,
+        question,
+        role=role,
+        strategy=strategy,
+        top_k=top_k,
+        conversation_id=conversation_id,
+        use_rewrite=use_rewrite,
+        llm=llm,
+    )
+    thr = await _threshold(session)
+
+    # ① 检索一完成就发证据：这一行之前没有任何模型调用
+    yield {"event": "evidence", "data": [h.to_dict() for h in retrieval.hits]}
+
+    stream = AnswerStream(
+        rewritten,
+        retrieval,
+        llm,
+        page_texts=page_texts,
+        history=history,
+        selfcheck=selfcheck,
+        threshold=thr.value,
+        reranker_name=thr.reranker,
+    )
+    # ② 逐块转发答案正文的增量
+    async for delta in stream:
+        yield {"event": "token", "data": {"text": delta}}
+
+    ans = stream.answer
+    if ans is None:  # pragma: no cover - AnswerStream 必定留下 Answer
+        raise RuntimeError("AnswerStream 结束时没有产出 Answer")
+    ans.rewritten_query = rewritten if rewritten != question else ""
+    ans.latency_ms = int((time.perf_counter() - t0) * 1000)
+    ans.debug |= _debug_payload(rewritten, retrieval, strategy)
+    ans.debug["refusal_threshold"] = thr.to_dict()
+    ans.debug.setdefault("streaming", {})["degraded_reason"] = stream.degraded
+
+    if conversation_id is None and persist:
+        conv = Conversation(user_id=user_id or "anonymous")
+        session.add(conv)
+        await session.flush()
+        conversation_id = conv.id
+    if persist:
+        await _persist_exchange(session, conversation_id, question, ans)
+    ans.debug["conversation_id"] = conversation_id
+    ans.debug.update({"total_ms": ans.latency_ms, "settings_topk": s.top_k})
+
+    # ③ 权威结果（未被拦截时它可能与 token 草稿不同，前端应以此覆盖）
     yield {"event": "answer", "data": ans.to_dict()}
-    _ = asyncio

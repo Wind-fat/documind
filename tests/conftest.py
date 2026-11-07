@@ -105,6 +105,19 @@ class FakeLLM:
         text = self.payloads.pop(0) if self.payloads else '{"answer":"文档中未找到相关条款","citations":[],"not_found":true}'
         return LLMReply(text=text, usage=Usage(model="fake", prompt_tokens=10, completion_tokens=5, cost_usd=0.0))
 
+    async def chat_stream(self, messages, *, json_mode=False, max_tokens=None, meta=None):
+        """一次性把同一份剧本当"单块流"吐出来：给不关心时序的用例用。"""
+        from documind.llm import Usage
+
+        self.calls.append(messages)
+        text = self.payloads.pop(0) if self.payloads else '{"answer":"文档中未找到相关条款","citations":[],"not_found":true}'
+        if meta is not None:
+            meta.usage = Usage(model="fake", prompt_tokens=10, completion_tokens=5, cost_usd=0.0)
+            meta.usage_available = True
+            meta.chunks = 1
+            meta.ttft_ms = 0
+        yield text
+
 
 @pytest.fixture()
 def fake_llm():

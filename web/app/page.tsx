@@ -89,6 +89,7 @@ export default function AskPage() {
   const [streaming, setStreaming] = useState(true);
   const [phase, setPhase] = useState<Phase>("idle");
   const [answer, setAnswer] = useState<Answer | null>(null);
+  const [draft, setDraft] = useState("");
   const [hits, setHits] = useState<Hit[]>([]);
   const [error, setError] = useState<ApiError | null>(null);
   const [flashRef, setFlashRef] = useState<number | null>(null);
@@ -151,6 +152,7 @@ export default function AskPage() {
       abortRef.current = controller;
 
       setAnswer(null);
+      setDraft("");
       setHits([]);
       setError(null);
       setViewer(null);
@@ -166,8 +168,14 @@ export default function AskPage() {
                 setHits(incoming);
                 setPhase("evidence");
               },
+              onToken: (text) => {
+                // 草稿逐块追加；answer 到达时 setAnswer + setDraft("") 覆盖
+                setDraft((prev) => prev + text);
+                setPhase("evidence");
+              },
               onAnswer: (incoming) => {
                 setAnswer(incoming);
+                setDraft("");
                 if (incoming.debug?.hits?.length) setHits(incoming.debug.hits);
                 setPhase("done");
               },
@@ -380,14 +388,27 @@ export default function AskPage() {
                     <span className="spinner" /> 正在检索并生成答案…
                   </span>
                   <span className="card-sub">
-                    {phase === "streaming" ? "等待 evidence" : phase === "evidence" ? "evidence 已到，等待 answer" : "POST /query"}
+                    {phase === "streaming"
+                      ? "等待 evidence"
+                      : draft
+                        ? `evidence 已到 · 已流式收到 ${draft.length} 字（草稿）`
+                        : "evidence 已到，等待 answer"}
                   </span>
                 </div>
-                <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 9 }}>
-                  <div className="skeleton" style={{ height: 13, width: "88%" }} />
-                  <div className="skeleton" style={{ height: 13, width: "74%" }} />
-                  <div className="skeleton" style={{ height: 13, width: "52%" }} />
-                </div>
+                {draft ? (
+                  <div
+                    style={{ padding: "18px 20px", lineHeight: 1.75, whiteSpace: "pre-wrap", opacity: 0.92 }}
+                  >
+                    {draft}
+                    <span aria-hidden="true">▌</span>
+                  </div>
+                ) : (
+                  <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 9 }}>
+                    <div className="skeleton" style={{ height: 13, width: "88%" }} />
+                    <div className="skeleton" style={{ height: 13, width: "74%" }} />
+                    <div className="skeleton" style={{ height: 13, width: "52%" }} />
+                  </div>
+                )}
               </div>
             ) : null}
 

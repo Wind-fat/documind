@@ -143,6 +143,10 @@ class EvalRun(Base):
     n_cases: Mapped[int] = mapped_column(default=0)
     metrics: Mapped[str] = mapped_column(Text, default="{}")
     report_path: Mapped[str] = mapped_column(String(512), default="")
+    # 这次评测用的是哪个 reranker（阈值的桶键）与它标出来的建议阈值。
+    # 没有这两列，"标定值"只活在报告 HTML 里，代码无从读取（P1-03）。
+    reranker: Mapped[str] = mapped_column(String(96), default="", index=True)
+    recommended_threshold: Mapped[float | None] = mapped_column(nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(default=_now)
 
 

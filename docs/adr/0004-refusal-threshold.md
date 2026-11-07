@@ -28,3 +28,17 @@
 
 - 分层阈值（按文档类型/问题类型给不同阈值）：样本量还不够支撑分组标定，过拟合风险大于收益。
 - 用 LLM 自己判断"要不要拒答"：模型对"资料里没有"的自我判断显著偏向过度自信，实测不如分数阈值可靠。
+
+## 实现状态（P1-03 回写补丁，2026-11）
+
+原实现只有决策、没有闭环：阈值是 `config.py` 里写死的 `-6.0`，标定器只把建议写进报告 HTML。
+现在的落地方式（代码见 `src/documind/thresholds.py`）：
+
+1. **按 reranker 分桶**：桶的键是 `reranker.name`（`lexical` / `BAAI/bge-reranker-base`）。
+   两个分数域（[-12,0] 与 logits）不再共用一个数值。
+2. **标定回写**：`calibrate_threshold` 的结果写入 `eval_runs.recommended_threshold` + `eval_runs.reranker`，
+   服务启动/每次检索按 name 取最近一次标定值。
+3. **优先级**：`DOCUMIND_REFUSAL_THRESHOLD`（显式覆盖） > 最近一次标定值 > 内置占位（`/health` 标 `builtin` + 警告）。
+   覆盖值与标定值不一致时打 WARNING，并在 `/health.refusal_threshold.mismatch` 亮出。
+4. **网格由数据决定**：按 top_score 的分位数生成，覆盖 `[min-1, max+1]`，
+   不再写死 `[-14, 0]`（那个区间扫不到 cross-encoder 的正值侧）。

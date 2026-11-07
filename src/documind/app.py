@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import tempfile
 import time
@@ -16,11 +17,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
-from .db import Chunk, Document, EvalRun, Page, User, get_db, init_db
+from .db import Chunk, Document, EvalRun, Page, User, get_db, get_session_factory, init_db
 from .embed import EmbeddingSpaceMismatch, embedder_health
 from .parsing import EmptyDocumentError
 from .pipeline import ask, ingest_document, stream_answer
 from .retrieve import store
+from .thresholds import ThresholdState, resolve_refusal_threshold
 
 app = FastAPI(title="DocuMind", version="0.1.0", description="带证据链与拒答能力的企业知识库问答")
 app.add_middleware(
@@ -31,10 +33,27 @@ app.add_middleware(
 )
 
 
+async def _threshold_state(db: AsyncSession) -> ThresholdState:
+    """生效拒答阈值 + 它的来源。`reranker_name()` 不触发模型加载，/health 保持廉价。"""
+    from .rerank import reranker_name
+
+    return await resolve_refusal_threshold(db, reranker_name())
+
+
 @app.on_event("startup")
 async def _startup() -> None:
     get_settings().ensure_dirs()
     await init_db()
+    # 启动即解析一次阈值：标定值与环境变量不一致时，警告必须出现在服务启动日志里（P1-03）
+    async with get_session_factory()() as session:
+        st = await _threshold_state(session)
+    logging.getLogger("documind.thresholds").info(
+        "拒答阈值生效: %.4f（reranker=%s，来源=%s，标定值=%s）",
+        st.value,
+        st.reranker,
+        st.source,
+        st.calibrated,
+    )
 
 
 class QueryIn(BaseModel):
@@ -96,6 +115,7 @@ async def health(db: AsyncSession = Depends(get_db)) -> dict:
     docs = (await db.execute(sa.select(sa.func.count(Document.id)))).scalar_one()
     chunks = (await db.execute(sa.select(sa.func.count(Chunk.id)))).scalar_one()
     emb = embedder_health()
+    thr = await _threshold_state(db)
     return {
         "status": "ok",
         "documents": docs,
@@ -109,6 +129,10 @@ async def health(db: AsyncSession = Depends(get_db)) -> dict:
         "degraded_reason": emb["degraded_reason"],
         "index_version": store.version,
         "llm": {"base_url": get_settings().llm_base_url, "model": get_settings().llm_model},
+        # 实际生效的拒答阈值与它的来源（P1-03）：mismatch=true 表示 env 覆盖与标定值打架
+        "refusal_threshold": thr.to_dict(),
+        # 真流式的能力声明：客户端可据此判断 `/query/stream` 是否会先发 evidence（P1-05）
+        "streaming": {"endpoint": "/query/stream", "events": ["evidence", "token", "answer"]},
     }
 
 
@@ -249,9 +273,16 @@ async def query_stream(
     question: str = Query(...),
     conversation_id: str | None = None,
     strategy: str = "structure",
+    selfcheck: bool | None = None,
     user: User = Depends(current_user),
     db: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
+    """SSE：`evidence`（检索完即发）→ 0..n × `token`（逐块）→ `answer`（权威）。
+
+    向后兼容：事件名与字段沿用 v0.1（`evidence` 是 Hit 数组，`answer` 是完整 Answer），
+    `token` 是新增事件，旧客户端解析到未知事件时忽略即可，时序与载荷都不变（P1-05）。
+    """
+
     async def gen():
         async for ev in stream_answer(
             db,
@@ -260,10 +291,20 @@ async def query_stream(
             user_id=user.id,
             conversation_id=conversation_id,
             strategy=strategy,
+            selfcheck=selfcheck,
         ):
             yield f"event: {ev['event']}\ndata: {json.dumps(ev['data'], ensure_ascii=False)}\n\n"
 
-    return StreamingResponse(gen(), media_type="text/event-stream")
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            # 三层缓冲都要关掉，否则"真流式"会在代理层被重新攒成一次性响应
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 class LoginIn(BaseModel):
@@ -320,10 +361,13 @@ async def eval_runs(db: AsyncSession = Depends(get_db)) -> list[dict]:
             "strategy": r.strategy,
             "dataset": r.dataset,
             "n_cases": r.n_cases,
-            "metrics": json.loads(r.metrics),
-            "created_at": r.created_at.isoformat(),
-            "report_path": r.report_path,
-        }
+                        "metrics": json.loads(r.metrics),
+                        "created_at": r.created_at.isoformat(),
+                        "report_path": r.report_path,
+                        # 标定回写：阈值现在是可查询的事实，而不是报告里的一段文字（P1-03）
+                        "reranker": r.reranker,
+                        "recommended_threshold": r.recommended_threshold,
+                    }
         for r in rows
     ]
 

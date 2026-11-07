@@ -37,7 +37,11 @@ class Settings(BaseSettings):
     recall_n: int = 30            # 粗排召回数，精排从这里挑 top_k
     rrf_k: int = 60
     # 拒答阈值：由 evals 的 P-R 曲线标定，不是拍脑袋的 0.6。见 docs/adr/0004-refusal-threshold.md
-    refusal_rerank_threshold: float = -6.0
+    # 优先级（P1-03，见 thresholds.py）：DOCUMIND_REFUSAL_THRESHOLD > 最近一次标定值 > 内置占位。
+    # 两个字段都是 None 表示"没显式覆盖"——这里**不能**给默认数值，
+    # 否则代码永远分不清"用户设了"与"默认值"，标定回写就没有生效的机会。
+    refusal_threshold: float | None = None          # DOCUMIND_REFUSAL_THRESHOLD（推荐）
+    refusal_rerank_threshold: float | None = None   # 旧名，兼容既有 .env；新名优先
     selfcheck_retry: bool = True
 
     # ---- 模型 ----
@@ -56,7 +60,9 @@ class Settings(BaseSettings):
     admin_token: str = "dev-admin-token"
     session_secret: str = "dev-session-secret-change-me"
 
-    @field_validator("llm_timeout_s", "refusal_rerank_threshold", mode="before")
+    @field_validator(
+        "llm_timeout_s", "refusal_threshold", "refusal_rerank_threshold", mode="before"
+    )
     @classmethod
     def _blank_to_default(cls, v):
         # 空 env 值会被解析成 ""，数值字段直接 ValidationError（aigate 上踩过）
