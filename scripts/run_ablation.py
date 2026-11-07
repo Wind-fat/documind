@@ -13,9 +13,14 @@ async def main() -> None:
     limit = None
     if "--limit" in sys.argv:
         limit = int(sys.argv[sys.argv.index("--limit") + 1])
+    concurrency = 10
+    if "--concurrency" in sys.argv:
+        concurrency = int(sys.argv[sys.argv.index("--concurrency") + 1])
+    if "--strategies" in sys.argv:
+        strategies = sys.argv[sys.argv.index("--strategies") + 1].split(",")
     await init_db()
     async with get_session_factory()() as s:
-        report = await run_eval(s, dataset="default", strategies=strategies, limit=limit)
+        report = await run_eval(s, dataset="default", strategies=strategies, limit=limit, concurrency=concurrency)
     print("\n=== summary ===")
     print(json.dumps(report["summary"], ensure_ascii=False, indent=2))
     print("\n=== 拒答阈值 ===")

@@ -9,3 +9,6 @@ data/
 web/.next/
 web/node_modules/
 .env
+node_modules/
+.next/
+out/
