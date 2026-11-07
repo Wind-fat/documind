@@ -61,6 +61,8 @@ async def ingest_document(
         page_count=parsed.page_count,
         acl_roles=json.dumps(acl_roles or ["all"], ensure_ascii=False),
         source_path=str(p.resolve()),
+        # 向量空间指纹：这份文档的向量由哪个 embedder / 多少维产出（P0-02）
+        embed_space=embedder.space,
     )
     session.add(doc)
     await session.flush()
@@ -88,6 +90,8 @@ async def ingest_document(
                     section_path=c.section_path,
                     tokens=len(c.text),
                     embedding=vec.astype(np.float32).tobytes(),
+                    embed_model=embedder.name,
+                    embed_dim=int(vec.shape[0]),
                 )
                 session.add(row)
                 await session.flush()
@@ -110,6 +114,8 @@ async def ingest_document(
                     section_path=c.section_path,
                     tokens=len(c.text),
                     embedding=vec.astype(np.float32).tobytes(),
+                    embed_model=embedder.name,
+                    embed_dim=int(vec.shape[0]),
                 )
             )
         lengths = [len(c.text) for c in children] or [0]
@@ -129,6 +135,8 @@ async def ingest_document(
         "strategy_stats": stats,
         "elapsed_ms": int((time.perf_counter() - t0) * 1000),
         "embedder": embedder.name,
+        # 入库响应就带上向量空间，排障时不用再查库（P0-02）
+        "embed_space": embedder.space,
     }
 
 

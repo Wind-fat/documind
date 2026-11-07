@@ -7,6 +7,7 @@ import json
 import time
 
 from ..config import ROOT
+from ..embed import embedder_health
 
 REPORTS = ROOT / "evals" / "reports"
 
@@ -23,19 +24,42 @@ COLS = [
 ]
 
 
-def write_reports(dataset: str, summary: dict, details: dict, calibration: dict) -> dict:
+def write_reports(
+    dataset: str, summary: dict, details: dict, calibration: dict, embedder: dict | None = None
+) -> dict:
+    """写报告。`embedder` 是本次评测实际用的 embedder 事实（name/dim/backend/degraded）。
+
+    不传就现场取当前 embedder；历史报告与当前报告必须能区分开——降级到 hash 后
+    指标会掉，报告里看不到用的是什么 embedder，这组数字就没法解释（P0-02）。
+    """
+    info = embedder or embedder_health()
     REPORTS.mkdir(parents=True, exist_ok=True)
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    md = _markdown(dataset, summary, calibration)
+    md = _markdown(dataset, summary, calibration, info)
     md_path = REPORTS / "ablation.md"
     md_path.write_text(md, encoding="utf-8")
     snap = REPORTS / f"ablation-{stamp}.md"
     snap.write_text(md, encoding="utf-8")
     html_path = REPORTS / "ablation.html"
-    html_path.write_text(_html(dataset, summary, calibration), encoding="utf-8")
+    html_path.write_text(_html(dataset, summary, calibration, info), encoding="utf-8")
     json_path = REPORTS / f"details-{stamp}.json"
-    json_path.write_text(json.dumps({"summary": summary, "calibration": calibration, "details": details}, ensure_ascii=False, indent=2), encoding="utf-8")
-    return {"markdown": str(md_path), "html": str(html_path), "json": str(json_path), "snapshot": str(snap)}
+    json_path.write_text(
+        json.dumps(
+            {"embedder": info, "summary": summary, "calibration": calibration, "details": details},
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    return {"markdown": str(md_path), "html": str(html_path), "json": str(json_path), "snapshot": str(snap), "embedder": info}
+
+
+def _embedder_line(info: dict) -> str:
+    degraded = " · **已自动降级**" if info.get("degraded") else ""
+    return (
+        f"embedder: `{info.get('name')}` · dim {info.get('dim')} · "
+        f"backend {info.get('backend')} · space `{info.get('space')}`{degraded}"
+    )
 
 
 def _fmt(v, kind: str) -> str:
@@ -46,7 +70,7 @@ def _fmt(v, kind: str) -> str:
     return f"{float(v):.3f}" if float(v) <= 1 else f"{float(v):.0f}"
 
 
-def _markdown(dataset: str, summary: dict, calibration: dict) -> str:
+def _markdown(dataset: str, summary: dict, calibration: dict, embedder: dict) -> str:
     strategies = list(summary.keys())
     lines = [
         f"# 切块策略消融实验（dataset: {dataset}）",
@@ -54,6 +78,7 @@ def _markdown(dataset: str, summary: dict, calibration: dict) -> str:
         f"生成时间：{time.strftime('%Y-%m-%d %H:%M')}　"
         f"样本：{summary[strategies[0]]['n_cases']} 条"
         f"（可答 {summary[strategies[0]]['n_answerable']} / 不可答 {summary[strategies[0]]['n_unanswerable']}）",
+        _embedder_line(embedder),
         "",
         "| 指标 | " + " | ".join(strategies) + " |",
         "|---|" + "---|" * len(strategies),
@@ -91,7 +116,7 @@ def _markdown(dataset: str, summary: dict, calibration: dict) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _html(dataset: str, summary: dict, calibration: dict) -> str:
+def _html(dataset: str, summary: dict, calibration: dict, embedder: dict) -> str:
     strategies = list(summary.keys())
     rec = calibration["recommended"]
 
@@ -139,6 +164,7 @@ def _html(dataset: str, summary: dict, calibration: dict) -> str:
 </style></head><body>
 <h1>切块策略消融实验</h1>
 <div class="sub">dataset: {html.escape(dataset)} · {summary[strategies[0]]['n_cases']} 条样本 · 同一语料、同一套检索与生成链路，只换切块</div>
+<div class="sub">embedder: {html.escape(str(embedder.get('name')))} · dim {embedder.get('dim')} · backend {html.escape(str(embedder.get('backend')))}{' · <b style="color:#e06c75">已自动降级</b>' if embedder.get('degraded') else ''}</div>
 <table><tr><th>指标</th>{''.join(f"<th>{html.escape(s)}</th>" for s in strategies)}</tr>{rows}</table>
 <div class="card"><b>拒答阈值标定</b>
   <div class="sub" style="margin:6px 0 10px">{html.escape(calibration['rule'])}</div>

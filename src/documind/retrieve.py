@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from dataclasses import asdict, dataclass, field
 
@@ -21,7 +22,7 @@ from .chunking import Chunk
 from .config import get_settings
 from .db import Chunk as ChunkRow
 from .db import Document
-from .embed import Embedder, get_embedder
+from .embed import Embedder, EmbeddingSpaceMismatch, get_embedder
 from .index import IndexItem, SearchIndex, rrf_fuse
 from .rerank import Reranker, get_reranker
 
@@ -57,10 +58,13 @@ class RetrievalResult:
 
 
 class IndexStore:
-    """进程内索引缓存：按策略缓存，文档变更后 bump 版本失效。
+    """进程内索引缓存：按 (策略, 向量空间) 缓存，文档变更后 bump 版本失效。
 
     dev 的取舍：万级 chunk 下重建 ~0.3s，比维护一个外部索引服务简单得多；
     多副本时内存索引各自重建会有短暂不一致，这也是 prod 要换 OpenSearch/pgvector 的原因。
+
+    P0-02：建索引前先核对**向量空间指纹**。库里的块与当前 embedder 不是同一个 `model@dim`
+    时直接抛 EmbeddingSpaceMismatch —— 不同空间的向量算余弦不会报错，只会静默给出错的排名。
     """
 
     def __init__(self) -> None:
@@ -71,9 +75,25 @@ class IndexStore:
         self._cache.clear()
         self.version += 1
 
+    @staticmethod
+    def _mismatch_error(space: str, by_space: dict[str, int], docs: list[str]) -> EmbeddingSpaceMismatch:
+        found = "、".join(f"{s}（{n} 个块）" for s, n in sorted(by_space.items()))
+        # 标题可能是正文首 40 字的回退值，压掉换行避免错误信息读不出来
+        names = [re.sub(r"\s+", " ", d).strip()[:40] for d in docs[:5] if d.strip()]
+        where = f"；涉及文档：{', '.join(names)}" if names else ""
+        return EmbeddingSpaceMismatch(
+            f"向量空间不一致：当前 embedder={space}，索引中的块来自 {found}{where}。"
+            "继续检索会得到语义上不可比的结果，已中止。"
+            "处理：① 用当前 embedder 重新入库这些文档；"
+            "② 或把 DOCUMIND_EMBED_BACKEND / DOCUMIND_EMBED_MODEL 改回建库时的配置。"
+        )
+
     async def get(self, session: AsyncSession, strategy: str, embedder: Embedder | None = None) -> SearchIndex:
-        if strategy in self._cache:
-            return self._cache[strategy]
+        embedder = embedder or get_embedder()
+        space = embedder.space
+        key = f"{strategy}::{space}"
+        if key in self._cache:
+            return self._cache[key]
         rows = (
             (
                 await session.execute(
@@ -83,12 +103,39 @@ class IndexStore:
             .scalars()
             .all()
         )
-        embedder = embedder or get_embedder()
+
+        # --- 向量空间核对（先核对，再补算，绝不把新向量塞进旧空间） ---
+        by_space: dict[str, int] = {}
+        legacy: list[ChunkRow] = []
+        for r in rows:
+            if r.embedding is None:
+                continue  # 没向量，谈不上空间；下面统一补算
+            row_space = r.embed_space
+            if not row_space:
+                legacy.append(r)
+            elif row_space != space:
+                by_space[row_space] = by_space.get(row_space, 0) + 1
+        if by_space:
+            doc_ids = sorted({r.doc_id for r in rows if r.embed_space and r.embed_space != space})
+            titles = (
+                (await session.execute(sa.select(Document.title).where(Document.id.in_(doc_ids)))).scalars().all()
+            )
+            raise self._mismatch_error(space, by_space, list(titles))
+        if legacy:
+            raise EmbeddingSpaceMismatch(
+                f"索引中有 {len(legacy)} 个块缺少向量空间指纹（迁移前的历史数据，embed_model/embed_dim 为空），"
+                f"无法判断它们由哪个 embedder 生成，拒绝与当前 {space} 混用。"
+                "处理：运行 scripts/backfill_embed_space.py --space <建库时的 model@dim> 显式声明，"
+                "或重新入库这些文档（脚本不会删库）。"
+            )
+
         missing = [r for r in rows if r.embedding is None]
         if missing:
             mat = embedder.embed([r.text for r in missing])
             for r, v in zip(missing, mat, strict=True):
                 r.embedding = v.astype(np.float32).tobytes()
+                r.embed_model = embedder.name
+                r.embed_dim = int(v.shape[0])
             await session.commit()
         items, vecs = [], []
         for r in rows:
@@ -109,7 +156,7 @@ class IndexStore:
             vecs.append(r.vector())
         matrix = np.vstack(vecs).astype(np.float32) if vecs else None
         idx = SearchIndex.build(strategy, items, matrix)
-        self._cache[strategy] = idx
+        self._cache[key] = idx
         return idx
 
 
@@ -149,8 +196,8 @@ async def retrieve(
     if not allowed:
         return RetrievalResult(latency_ms=int((time.perf_counter() - t0) * 1000), debug={"reason": "acl_empty"})
 
-    idx = await store.get(session, strategy, embedder)
     embedder = embedder or get_embedder()
+    idx = await store.get(session, strategy, embedder)
     reranker = reranker or get_reranker()
 
     qvec = (await asyncio.to_thread(embedder.embed, [query]))[0]

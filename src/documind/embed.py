@@ -7,15 +7,42 @@ bge-small-zh-v1.5（512 维）在中文制度/条款检索上够用，CPU 单条
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 import re
 import threading
 from collections.abc import Sequence
+from dataclasses import dataclass
 from functools import lru_cache
 
 import numpy as np
 
 from .config import get_settings
+
+log = logging.getLogger(__name__)
+
+
+class EmbeddingSpaceMismatch(RuntimeError):
+    """库里的向量与当前 embedder 不在同一个向量空间（模型或维度不同）。
+
+    这个异常存在的意义是**不要尽力而为**：不同模型/不同降级档产出的向量之间做余弦相似度
+    不会报错，只会给出语义上不可比的排名。宁可让检索失败，也不静默返回错结果（P0-02）。
+    """
+
+
+@dataclass(slots=True)
+class EmbedderStatus:
+    """当前 embedder 的运行时状态，给 /health 与评测报告用（降级必须可观测）。"""
+
+    backend: str = "unknown"  # bge | hash
+    degraded: bool = False  # 是否发生过自动降级（不是显式配置 hash）
+    reason: str = ""  # 降级原因（异常类型 + 摘要）
+
+    def as_dict(self) -> dict:
+        return {"backend": self.backend, "degraded": self.degraded, "reason": self.reason}
+
+
+_STATUS = EmbedderStatus()
 
 
 class Embedder:
@@ -24,6 +51,11 @@ class Embedder:
 
     def embed(self, texts: Sequence[str]) -> np.ndarray:  # pragma: no cover - interface
         raise NotImplementedError
+
+    @property
+    def space(self) -> str:
+        """向量空间标识：`model@dim`。写进 documents.embed_space 与 chunks.embed_model/embed_dim。"""
+        return f"{self.name}@{self.dim}"
 
     @staticmethod
     def _normalize(mat: np.ndarray) -> np.ndarray:
@@ -61,8 +93,8 @@ class BgeEmbedder(Embedder):
 class HashEmbedder(Embedder):
     """字符 2-gram 哈希到固定维度。不需要任何依赖，测试与离线 demo 用。
 
-    它当然不如 BGE 准，但**评测报告里会明写用的是哪个 embedder**，
-    不自欺欺人是这个项目的第一原则。
+    它当然不如 BGE 准，所以**降级不可静默**：backend/degraded 会进 /health 与评测报告，
+    `space` 也写进库里——换回 bge 时会因为空间不一致直接 fail-fast，而不是混着比。
     """
 
     name = "hash-bigram"
@@ -85,17 +117,42 @@ class HashEmbedder(Embedder):
 
 @lru_cache
 def get_embedder() -> Embedder:
-    """优先本地 BGE；模型拉不下来就降级到哈希，并且降级这件事会被记录。"""
+    """优先本地 BGE；模型拉不下来就降级到哈希。降级写进 _STATUS（/health 与报告可见）。"""
     s = get_settings()
     if s.embed_backend == "hash":
+        # 显式配置 hash（CI / 离线）不算降级，但 backend 仍然要标出来
+        _STATUS.backend, _STATUS.degraded, _STATUS.reason = "hash", False, ""
         return HashEmbedder()
     try:
-        return BgeEmbedder(cache_dir=str(s.model_cache_dir))
+        emb = BgeEmbedder(cache_dir=str(s.model_cache_dir))
     except Exception as exc:  # pragma: no cover - 依赖模型下载
-        import logging
-
-        logging.getLogger(__name__).warning("BGE 不可用，降级为 hash embedder: %s", exc)
+        _STATUS.backend = "hash"
+        _STATUS.degraded = True
+        _STATUS.reason = f"{type(exc).__name__}: {exc}"[:300]
+        log.warning("BGE 不可用，降级为 hash embedder: %s", exc)
         return HashEmbedder()
+    _STATUS.backend, _STATUS.degraded, _STATUS.reason = "bge", False, ""
+    return emb
+
+
+def embedder_status() -> EmbedderStatus:
+    """确保 embedder 已初始化后返回状态（调用它就会触发一次真实的模型加载尝试）。"""
+    get_embedder()
+    return _STATUS
+
+
+def embedder_health() -> dict:
+    """给 /health、评测报告、EvalRun.metrics 共用的一份 embedder 事实。"""
+    emb = get_embedder()
+    st = embedder_status()
+    return {
+        "name": emb.name,
+        "dim": emb.dim,
+        "space": emb.space,
+        "backend": st.backend,
+        "degraded": st.degraded,
+        "degraded_reason": st.reason,
+    }
 
 
 def cosine_search(query: np.ndarray, matrix: np.ndarray, ids: list[str], top_n: int) -> list[tuple[str, float]]:

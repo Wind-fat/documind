@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import ROOT, get_settings
 from ..db import EvalRun, Page, get_session_factory
+from ..embed import embedder_health
 from ..generate import answer_question
 from ..llm import LLMClient, get_llm
 from ..retrieve import retrieve
@@ -106,7 +107,13 @@ async def run_eval(
               f"p95={summary[strategy]['latency_p95_ms']}ms")
 
     calibration = calibrate_threshold([r for rows in details.values() for r in rows])
-    report = write_reports(dataset=dataset, summary=summary, details=details, calibration=calibration)
+    embedder = embedder_health()
+    # 每份报告都要能回答"这组数字是用哪个 embedder 跑的"：同时进报告与 EvalRun.metrics
+    for strategy in summary:
+        summary[strategy]["embedder"] = embedder
+    report = write_reports(
+        dataset=dataset, summary=summary, details=details, calibration=calibration, embedder=embedder
+    )
 
     for strategy, m in summary.items():
         session.add(

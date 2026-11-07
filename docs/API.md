@@ -8,9 +8,13 @@
 
 ## GET /health
 ```json
-{"status":"ok","documents":3,"chunks":912,"embedder":"bge-small-zh-v1.5","index_version":1,
+{"status":"ok","documents":3,"chunks":912,"embedder":"BAAI/bge-small-zh-v1.5","embed_dim":512,
+ "embed_space":"BAAI/bge-small-zh-v1.5@512","embedder_backend":"bge",
+ "degraded":[],"degraded_reason":"","index_version":1,
  "llm":{"base_url":"http://127.0.0.1:3425/v1","model":"qwen-cn/qwen3.8-flash"}}
 ```
+`degraded` 非空表示发生了自动降级（目前只有 `embedder`：bge 拉不下来退到 hash），原因在 `degraded_reason`。
+**别忽略这一项**：降级后检索质量会掉，而接口仍返回 200。
 
 ## GET /documents
 ```json
@@ -35,8 +39,18 @@ fields: `file`, `acl_roles`（JSON 字符串，如 `["all"]` 或 `["finance","ad
 ```json
 {"document_id":"a1b2","title":"公司章程","pages":59,"paragraphs":523,
  "strategy_stats":{"structure":{"chunks":47,"parents":0,"avg_chars":614.3,"max_chars":903}},
- "elapsed_ms":84859,"embedder":"bge-small-zh-v1.5"}
+ "elapsed_ms":84859,"embedder":"BAAI/bge-small-zh-v1.5","embed_space":"BAAI/bge-small-zh-v1.5@512"}
 ```
+失败：
+
+| 状态 | `detail.code` | 场景 |
+|---|---|---|
+| 422 | `empty_document` | 扫描件/图片型 PDF 没有文本层、空文件。`detail.message` 是中文可读原因（"未提取到文本，需要 OCR"）。不会建出空文档。 |
+
+## 409 检索侧：向量空间不一致
+库里的块由别的 embedder（或降级的 hash）生成时，`POST /query`、`GET /query/stream` 返回 409
+`{"detail":{"code":"embedding_space_mismatch","message":"..."}}`，而不是拿不可比的向量硬算排名。
+处理：用当前 embedder 重新入库，或把 `DOCUMIND_EMBED_BACKEND` / `DOCUMIND_EMBED_MODEL` 改回建库时的配置。
 
 ## POST /query
 ```json

@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import get_settings
 from .db import Chunk, Document, EvalRun, Page, User, get_db, init_db
-from .embed import get_embedder
+from .embed import EmbeddingSpaceMismatch, embedder_health
 from .parsing import EmptyDocumentError
 from .pipeline import ask, ingest_document, stream_answer
 from .retrieve import store
@@ -95,12 +95,18 @@ def require_admin(x_admin_token: str = Header(default="")) -> None:
 async def health(db: AsyncSession = Depends(get_db)) -> dict:
     docs = (await db.execute(sa.select(sa.func.count(Document.id)))).scalar_one()
     chunks = (await db.execute(sa.select(sa.func.count(Chunk.id)))).scalar_one()
-    emb = get_embedder()
+    emb = embedder_health()
     return {
         "status": "ok",
         "documents": docs,
         "chunks": chunks,
-        "embedder": emb.name,
+        "embedder": emb["name"],
+        "embed_dim": emb["dim"],
+        "embed_space": emb["space"],
+        "embedder_backend": emb["backend"],
+        # 降级必须是可观测的：bge→hash 只能在这里被看到（P0-02）
+        "degraded": ["embedder"] if emb["degraded"] else [],
+        "degraded_reason": emb["degraded_reason"],
         "index_version": store.version,
         "llm": {"base_url": get_settings().llm_base_url, "model": get_settings().llm_model},
     }
@@ -112,6 +118,15 @@ async def _empty_document_handler(_: Request, exc: EmptyDocumentError) -> JSONRe
     return JSONResponse(
         status_code=422,
         content={"detail": {"code": "empty_document", "message": str(exc)}},
+    )
+
+
+@app.exception_handler(EmbeddingSpaceMismatch)
+async def _space_mismatch_handler(_: Request, exc: EmbeddingSpaceMismatch) -> JSONResponse:
+    """向量空间不一致是服务端配置/数据问题，不是查询写错了：409 + 可读修复建议（P0-02）。"""
+    return JSONResponse(
+        status_code=409,
+        content={"detail": {"code": "embedding_space_mismatch", "message": str(exc)}},
     )
 
 
