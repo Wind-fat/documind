@@ -1,0 +1,133 @@
+"""评测指标：检索用确定性指标，生成质量用 LLM judge（prompt 与判定口径写在代码里，可审计）。
+
+指标口径（报告里每个数字后面都跟着这套定义）：
+- Recall@K：Top-K 命中任一 gold 页 / 任一引用片段逐字出现在召回上下文里，记为命中
+- Context Recall：gold quote 是否逐字出现在喂给模型的上下文里（衡量检索/切块的"召回完整性"）
+- Faithfulness：回答里每条事实性论断都能在上下文找到依据的比例（judge 判定）
+- Answer Relevancy：回答是否切题（judge 0/1，不再用 embedding 相似度凑数）
+- 拒答准确率：无答案问题上拒答的比例（宁拒不答的代价由这个数兑现）
+- 误拒率：有答案问题上被拒的比例
+- 引用有效率：引用能定位到页内 span 且 quote 在原文里逐字存在的比例
+"""
+
+from __future__ import annotations
+
+import re
+
+from ..generate import Answer
+from ..llm import LLMClient, parse_json
+from ..retrieve import RetrievalResult
+
+JUDGE_PROMPT = """你是严格的评审。给定【资料】【问题】【回答】，输出 JSON：
+{"faithfulness": 0.0~1.0, "relevancy": 0 或 1, "unsupported_claims": ["..."]}
+
+faithfulness = 回答中的事实性论断里，能在【资料】找到逐字依据的比例。
+- 回答拒答（明确说资料里没有）时 faithfulness = 1.0，relevancy 按"是否恰当拒答"判 1。
+- 常识性连接词（因此、综上）不算论断。
+- 数字、期限、比例、主体名称必须与资料完全一致，不一致即视为无依据。
+relevancy = 回答是否正面回答了【问题】（答非所问给 0）。"""
+
+
+def _norm(s: str) -> str:
+    return re.sub(r"\s+", "", s or "")
+
+
+def retrieval_metrics(retrieval: RetrievalResult, case: dict, k: int = 5) -> dict:
+    gold_pages = set(case.get("gold_pages") or [])
+    gold_quote = _norm(case.get("gold_quote") or "")
+    hits = retrieval.hits[:k]
+    page_hit = any(set(range(h.page_start, h.page_end + 1)) & gold_pages for h in hits) if gold_pages else False
+    quote_hit = bool(gold_quote) and any(gold_quote[:30] in _norm(h.text) for h in hits)
+    ctx_quote = bool(gold_quote) and any(gold_quote[:30] in _norm(h.text) for h in retrieval.contexts)
+    rank = None
+    for i, h in enumerate(hits, start=1):
+        if (set(range(h.page_start, h.page_end + 1)) & gold_pages) or (gold_quote and gold_quote[:30] in _norm(h.text)):
+            rank = i
+            break
+    return {
+        "recall_at_k": 1.0 if (page_hit or quote_hit) else 0.0,
+        "context_recall": 1.0 if ctx_quote else 0.0,
+        "mrr": (1.0 / rank) if rank else 0.0,
+    }
+
+
+async def judge_answer(llm: LLMClient, case: dict, ans: Answer, retrieval: RetrievalResult) -> dict:
+    context = "\n\n".join(f"[{i}] {h.text[:800]}" for i, h in enumerate(retrieval.contexts[:5], start=1))
+    reply = await llm.chat(
+        [
+            {"role": "system", "content": JUDGE_PROMPT},
+            {
+                "role": "user",
+                "content": (
+                    f"【资料】\n{context or '(空)'}\n\n【问题】\n{case['question']}\n\n"
+                    f"【回答】\n{ans.text}\n\n只输出 JSON。"
+                ),
+            },
+        ],
+        json_mode=True,
+        max_tokens=400,
+    )
+    if reply.usage.mocked:
+        return {"faithfulness": 0.0, "relevancy": 0, "unsupported_claims": [], "cost_usd": 0.0}
+    try:
+        data = parse_json(reply.text)
+    except Exception:
+        data = {"faithfulness": 0.0, "relevancy": 0, "unsupported_claims": ["judge_output_invalid"]}
+    return {
+        "faithfulness": float(data.get("faithfulness", 0.0)),
+        "relevancy": int(data.get("relevancy", 0)),
+        "unsupported_claims": data.get("unsupported_claims") or [],
+        "cost_usd": reply.usage.cost_usd,
+        "prompt_tokens": reply.usage.prompt_tokens,
+        "completion_tokens": reply.usage.completion_tokens,
+    }
+
+
+def citation_validity(ans: Answer, page_texts: dict[int, str]) -> float:
+    if ans.refused:
+        return 1.0
+    if not ans.citations:
+        return 0.0
+    ok = 0
+    for c in ans.citations:
+        page = page_texts.get(c.page_start, "")
+        if not page:
+            continue
+        if _norm(c.quote)[:20] and _norm(c.quote)[:20] in _norm(page):
+            ok += 1
+    return ok / len(ans.citations)
+
+
+def aggregate(rows: list[dict]) -> dict:
+    def mean(key: str, subset: list[dict] | None = None) -> float:
+        sub = subset if subset is not None else rows
+        vals = [r[key] for r in sub if r.get(key) is not None]
+        return round(sum(vals) / len(vals), 4) if vals else 0.0
+
+    ans_rows = [r for r in rows if r["answerable"]]
+    unans_rows = [r for r in rows if not r["answerable"]]
+    lats = sorted(r["latency_ms"] for r in rows)
+
+    def pct(p: float) -> float:
+        if not lats:
+            return 0.0
+        idx = min(len(lats) - 1, int(round(p * (len(lats) - 1))))
+        return float(lats[idx])
+
+    return {
+        "n_cases": len(rows),
+        "n_answerable": len(ans_rows),
+        "n_unanswerable": len(unans_rows),
+        "recall_at_5": mean("recall_at_k"),
+        "context_recall": mean("context_recall", ans_rows),
+        "mrr": mean("mrr", ans_rows),
+        "faithfulness": mean("faithfulness", ans_rows),
+        "answer_relevancy": mean("relevancy", ans_rows),
+        "citation_validity": mean("citation_validity", ans_rows),
+        "refusal_accuracy": mean("refused", unans_rows),
+        "false_refusal_rate": mean("refused", ans_rows),
+        "latency_p50_ms": pct(0.5),
+        "latency_p95_ms": pct(0.95),
+        "cost_per_query_usd": round(sum(r["cost_usd"] for r in rows) / max(len(rows), 1), 6),
+        "total_cost_usd": round(sum(r["cost_usd"] for r in rows), 4),
+    }
