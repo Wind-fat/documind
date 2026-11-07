@@ -12,7 +12,7 @@ import numpy as np
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .chunking import STRATEGIES, Chunk, chunk_document
+from .chunking import STRATEGIES, chunk_document
 from .config import get_settings
 from .db import Chunk as ChunkRow
 from .db import Conversation, Document, Message, Page
@@ -145,9 +145,14 @@ async def _history(session: AsyncSession, conversation_id: str | None) -> list[d
     return [{"role": r.role, "content": r.content} for r in rows]
 
 
-async def _page_texts(session: AsyncSession, doc_id: str) -> dict[int, str]:
-    rows = (await session.execute(sa.select(Page.page_no, Page.text).where(Page.doc_id == doc_id))).all()
-    return {no: text for no, text in rows}
+async def _page_texts(session: AsyncSession, doc_ids: set[str] | str) -> dict[tuple[str, int], str]:
+    """一次取回相关文档的页文本，供引用定位（key = (doc_id, 页码)）。"""
+    if isinstance(doc_ids, str):
+        doc_ids = {doc_ids}
+    rows = (
+        await session.execute(sa.select(Page.doc_id, Page.page_no, Page.text).where(Page.doc_id.in_(doc_ids)))
+    ).all()
+    return {(doc_id, no): text for doc_id, no, text in rows}
 
 
 async def ask(
@@ -174,10 +179,9 @@ async def ask(
     retrieval: RetrievalResult = await retrieve(
         session, rewritten, role=role, strategy=strategy, top_k=top_k
     )
-    page_texts: dict[int, str] = {}
-    if retrieval.hits:
-        page_texts = await _page_texts(session, retrieval.hits[0].doc_id)
-
+    page_texts: dict[tuple[str, int], str] = {}
+    if retrieval.contexts:
+        page_texts = await _page_texts(session, {h.doc_id for h in retrieval.contexts})
     ans = await answer_question(
         rewritten, retrieval, llm, page_texts=page_texts, history=history, selfcheck=selfcheck
     )

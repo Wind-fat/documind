@@ -1,6 +1,8 @@
 """把公开语料灌进 dev 库（固定 ACL 演示：美诺华章程仅财务/管理员可见）。"""
-import asyncio, json, sys
-from documind.db import init_db, get_session_factory, upsert_user
+import asyncio
+import json
+
+from documind.db import get_session_factory, init_db, upsert_user
 from documind.pipeline import ingest_document
 
 DOCS = [

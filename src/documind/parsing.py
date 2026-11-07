@@ -242,7 +242,22 @@ class PdfParser(Parser):
         meta = getattr(reader, "metadata", None)
         if meta and meta.title:
             title = str(meta.title).strip()
-        return _assemble(pages, title, path.name)
+        doc = _assemble(pages, title, path.name)
+        # PDF 元数据里的标题经常是"公司""章程"这种没有信息量的值，
+        # 且它会被写进每一张证据卡，所以宁可回退到首页正文。
+        if len(doc.title.strip()) < 8 or doc.title.strip() in {"公司", "章程", "Untitled", "无标题"}:
+            cand = ""
+            for p in doc.paragraphs[:6]:
+                t = p.text.strip()
+                if re.search(r"(股份有限公司|有限责任公司|有限公司)", t):
+                    cand = re.split(r"[（(]", t)[0].strip()
+                    break
+            if not cand:
+                cand = re.split(r"[（(]", doc.paragraphs[0].text.strip())[0] if doc.paragraphs else ""
+            cand = cand.strip()[:40]
+            if len(cand) >= 4:
+                doc.title = cand
+        return doc
 
 
 class DocxParser(Parser):

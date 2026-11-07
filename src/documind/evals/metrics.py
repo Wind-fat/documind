@@ -83,14 +83,14 @@ async def judge_answer(llm: LLMClient, case: dict, ans: Answer, retrieval: Retri
     }
 
 
-def citation_validity(ans: Answer, page_texts: dict[int, str]) -> float:
+def citation_validity(ans: Answer, page_texts: dict[tuple[str, int], str]) -> float:
     if ans.refused:
         return 1.0
     if not ans.citations:
         return 0.0
     ok = 0
     for c in ans.citations:
-        page = page_texts.get(c.page_start, "")
+        page = page_texts.get((c.doc_id, c.page_start), "")
         if not page:
             continue
         if _norm(c.quote)[:20] and _norm(c.quote)[:20] in _norm(page):

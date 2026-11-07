@@ -6,7 +6,6 @@ import argparse
 import asyncio
 import json
 import sys
-from pathlib import Path
 
 from .db import get_session_factory, init_db, upsert_user
 

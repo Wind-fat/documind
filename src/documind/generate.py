@@ -91,17 +91,23 @@ def _norm(s: str) -> str:
     return re.sub(r"\s+", "", s)
 
 
-def locate_quote(hit: Hit, quote: str, page_texts: dict[int, str] | None) -> tuple[int, int] | None:
-    """把模型给的 quote 定位回页内字符偏移；定位不到就退回整块 span。"""
-    q = _norm(quote)[:80]
-    if not q or not page_texts:
+def locate_quote(
+    hit: Hit, quote: str, page_texts: dict[tuple[str, int], str] | None
+) -> tuple[int, int, int] | None:
+    """把模型给的 quote 定位回"第几页、页内哪个字符区间"。
+
+    必须真的在该页原文里找到，找不到就返回 None（退回整块 span），
+    绝不能返回 (0, len) 这种"从页首开始高亮"的假定位——那是把错误藏起来。
+    """
+    if not quote or not page_texts:
         return None
-    for page, text in page_texts.items():
-        idx = _norm(text).find(q)
-        if idx >= 0:
-            # 归一化后下标与原文下标有偏差：用原文子串再找一次，拿真实偏移
-            raw = text.find(quote.strip()[:40])
-            return (raw if raw >= 0 else 0, (raw if raw >= 0 else 0) + len(quote.strip()))
+    needle = quote.strip()[:40]
+    for (doc_id, page), text in sorted(page_texts.items(), key=lambda kv: kv[0][1]):
+        if doc_id != hit.doc_id:
+            continue
+        raw = text.find(needle)
+        if raw >= 0:
+            return (page, raw, raw + len(needle))
     return None
 
 
@@ -109,7 +115,7 @@ async def answer_question(
     query: str,
     retrieval: RetrievalResult,
     llm: LLMClient,
-    page_texts: dict[int, str] | None = None,
+    page_texts: dict[tuple[str, int], str] | None = None,
     history: list[dict] | None = None,
     selfcheck: bool | None = None,
 ) -> Answer:
@@ -239,7 +245,7 @@ async def answer_question(
 
 
 def _validate_citations(
-    raw: list, mapping: dict[int, Hit], page_texts: dict[int, str] | None
+    raw: list, mapping: dict[int, Hit], page_texts: dict[tuple[str, int], str] | None
 ) -> list[Citation]:
     out: list[Citation] = []
     seen: set[int] = set()
@@ -256,8 +262,10 @@ def _validate_citations(
         if quote and _norm(quote)[:40] not in _norm(hit.text):
             continue
         span = locate_quote(hit, quote, page_texts) if quote else None
-        page = hit.page_start
-        cs, ce = (span if span else (hit.char_start, hit.char_end))
+        if span:
+            page, cs, ce = span
+        else:
+            page, cs, ce = hit.page_start, hit.char_start, hit.char_end
         out.append(
             Citation(
                 ref=ref,
@@ -266,8 +274,8 @@ def _validate_citations(
                 chunk_id=hit.chunk_id,
                 page_start=page,
                 char_start=cs,
-                page_end=hit.page_end if not span else page,
-                char_end=hit.char_end if not span else ce,
+                page_end=page,
+                char_end=ce,
                 quote=quote or hit.text[:60],
                 section_path=hit.section_path,
             )

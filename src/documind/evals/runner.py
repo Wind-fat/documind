@@ -11,7 +11,6 @@ import asyncio
 import json
 import statistics
 import time
-from pathlib import Path
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,7 +40,7 @@ async def _one_case(case: dict, strategy: str, llm: LLMClient, selfcheck: bool) 
 
     async with get_session_factory()() as session:
         ret = await retrieve(session, case["question"], role="admin", strategy=strategy)
-        page_texts = await _page_texts(session, ret.hits[0].doc_id) if ret.hits else {}
+        page_texts = await _page_texts(session, {h.doc_id for h in ret.hits}) if ret.hits else {}
         t0 = time.perf_counter()
         ans = await answer_question(case["question"], ret, llm, page_texts=page_texts, selfcheck=selfcheck)
         latency = int((time.perf_counter() - t0) * 1000) + ret.latency_ms

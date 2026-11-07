@@ -140,6 +140,19 @@ export interface Stats {
   refusal_rate: number;
 }
 
+/** 原文弹层的定位目标：来自证据卡（chunk 跨度）或引用（精确定位后的跨度）。 */
+export interface ViewerTarget {
+  doc_id: string;
+  doc_title: string;
+  page_start: number;
+  page_end: number;
+  char_start: number;
+  char_end: number;
+  quote?: string;
+  section_path?: string;
+  chunk_id?: string;
+}
+
 export interface QueryInput {
   question: string;
   strategy: Strategy;
