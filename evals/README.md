@@ -16,7 +16,7 @@ evals/
 | 可答问题 | 从 structure 切块的块里抽样，让 LLM **只根据该块原文**出题，并要求给出逐字 quote 作为 gold 依据；quote 不能在该块里逐字找到的样本直接丢弃 |
 | 不可答问题 | 20 条固定问题（年假折现、报销标准、工资发放日、试用期等），这些内容章程里确实没有——用来量拒答准确率 |
 | 人工校验 | 抽检 20 条，删掉 3 条问题有歧义、1 条答案不唯一的样本 |
-| holdout | 当前 100 条全量用于对比（样本量小），**没有**划分 holdout；这是已知限制，不宣称"线上分布一致" |
+| holdout | 当前 87 条（67 可答 / 20 不可答）全量用于对比（样本量小），**没有**划分 holdout；这是已知限制，不宣称"线上分布一致" |
 
 生成命令（幂等：已存在就不重跑）：
 
@@ -47,6 +47,20 @@ asyncio.run(m())"
 uv run documind eval --dataset default                      # 四种切块全跑
 uv run documind eval --dataset default --limit 20           # 冒烟
 uv run documind eval --dataset default --strategies structure
+```
+
+**完整四策略跑法**：单个进程跑四策略 × 87 题时，rerank（bge-reranker-base，CPU）是进程内串行段，
+一个策略要 30 分钟以上，容易被工具/会话的超时打断。用分片并行版（只做编排，指标与判定仍走 `src/documind/evals`）：
+
+```bash
+# 每策略 20 可答 + 8 不可答，3 个 worker 进程并行，逐题落盘到 evals/reports/_parts/
+./.venv/Scripts/python.exe -u scripts/run_ablation_parallel.py \
+    --strategies fixed,semantic,structure,parent_child \
+    --ans-limit 20 --unans-limit 8 --workers 3 --concurrency 2
+
+# 只合并已有分片、重写报告（跑挂了也不用重跑模型）
+./.venv/Scripts/python.exe -u scripts/run_ablation_parallel.py --merge-only \
+    --ans-limit 20 --unans-limit 8 --since-epoch <本次开跑的 epoch 秒>
 ```
 
 产物：`evals/reports/ablation.md`（贴 README）、`ablation.html`（评测看板，`/evals/report` 直接返回它）、

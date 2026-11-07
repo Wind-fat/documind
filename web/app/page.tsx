@@ -216,7 +216,7 @@ export default function AskPage() {
         subtitle={`${strategy} · top_k=5 · ${streaming ? "SSE" : "POST /query"}`}
         right={
           <>
-            <span>X-User: {user}</span>
+            <span>Bearer · {user}</span>
             <span className={`tag ${busy ? "warn" : "ok"}`}>{busy ? "推理中" : "就绪"}</span>
           </>
         }
@@ -344,7 +344,13 @@ export default function AskPage() {
           <div className="answer-wrap">
             {error ? (
               <ErrorState
-                title={error.status === 0 ? "后端不可达" : "请求失败"}
+                title={
+                  error.status === 0
+                    ? "后端不可达"
+                    : error.status === 401
+                      ? "身份无效（401）"
+                      : "请求失败"
+                }
                 message={error.detail}
                 status={error.status}
                 onRetry={() => void run(question)}

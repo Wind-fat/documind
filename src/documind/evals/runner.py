@@ -142,7 +142,14 @@ def calibrate_threshold(rows: list[dict]) -> dict:
         curve.append({"threshold": th, "refusal_accuracy": round(refused_unans, 4), "false_refusal": round(refused_ans, 4)})
 
     feasible = [c for c in curve if c["false_refusal"] <= 0.15]
-    best = max(feasible, key=lambda c: (c["refusal_accuracy"], c["threshold"])) if feasible else curve[0]
+    # 平台期（拒答准确率同为 100%）上取误拒率最低的点，而不是阈值最高的点：
+    # 原来的 (refusal_accuracy, threshold) 会让阈值在平台上一直往上顶，
+    # 选出一堆"拒得更多但没换来任何收益"的严格劣势点。
+    best = (
+        max(feasible, key=lambda c: (c["refusal_accuracy"], -c["false_refusal"], -c["threshold"]))
+        if feasible
+        else curve[0]
+    )
     return {
         "curve": curve,
         "recommended": best,

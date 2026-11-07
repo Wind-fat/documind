@@ -129,7 +129,7 @@ export default function DocumentsPage() {
         subtitle={`${docs.length} 篇文档 · 上传需 X-Admin-Token`}
         right={
           <>
-            <span>X-User: {user}</span>
+            <span>Bearer · {user}</span>
             <button type="button" className="btn btn-sm" onClick={load} disabled={loading}>
               刷新
             </button>

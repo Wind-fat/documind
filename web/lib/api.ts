@@ -37,6 +37,165 @@ export function toApiError(err: unknown): ApiError {
   return new ApiError(0, "未知错误");
 }
 
+/* -------------------------------- 身份令牌 -------------------------------- */
+
+/**
+ * 后端只认签名令牌（auth.py / P0-01）：GET 与 POST 一律带
+ * `Authorization: Bearer <token>`，裸 `X-User` 仅开发环境兜底、生产直接 401。
+ * 所以这里先用 POST /auth/login 换 token，按用户缓存，过期前 30s 自动重签。
+ */
+interface TokenEntry {
+  user: string;
+  token: string;
+  exp: number;
+}
+
+const TOKEN_PREFIX = "documind.token.";
+
+let cachedToken: TokenEntry | null = null;
+let loginInFlight: { user: string; promise: Promise<string> } | null = null;
+
+function tokenExpiry(token: string): number {
+  const parts = token.split(":");
+  if (parts.length !== 4) return 0;
+  const exp = Number(parts[2]);
+  return Number.isFinite(exp) ? exp : 0;
+}
+
+function tokenValid(entry: TokenEntry | null): entry is TokenEntry {
+  return entry !== null && entry.exp - 30 > Math.floor(Date.now() / 1000);
+}
+
+function loadStoredToken(user: string): TokenEntry | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(TOKEN_PREFIX + user);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<TokenEntry>;
+    if (typeof parsed.token !== "string") return null;
+    return { user, token: parsed.token, exp: tokenExpiry(parsed.token) };
+  } catch {
+    return null;
+  }
+}
+
+function storeToken(entry: TokenEntry): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(TOKEN_PREFIX + entry.user, JSON.stringify(entry));
+  } catch {
+    /* 隐私模式下 sessionStorage 可能不可用，退化为内存缓存 */
+  }
+}
+
+/** 401 后作废缓存，下一次请求会重新登录。 */
+export function forgetToken(user?: string): void {
+  if (user) {
+    cachedToken = cachedToken?.user === user ? null : cachedToken;
+    try {
+      window.sessionStorage.removeItem(TOKEN_PREFIX + user);
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
+  if (cachedToken) {
+    try {
+      window.sessionStorage.removeItem(TOKEN_PREFIX + cachedToken.user);
+    } catch {
+      /* ignore */
+    }
+  }
+  cachedToken = null;
+}
+
+async function login(user: string): Promise<string> {
+  if (loginInFlight && loginInFlight.user === user) return loginInFlight.promise;
+
+  const promise = (async (): Promise<string> => {
+    let res: Response;
+    try {
+      res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({ name: user }),
+        cache: "no-store",
+      });
+    } catch (err) {
+      throw new ApiError(0, `无法连接后端：${err instanceof Error ? err.message : String(err)}`);
+    }
+    if (!res.ok) {
+      throw new ApiError(res.status, `登录失败（${user}）：${await readErrorDetail(res)}`);
+    }
+    const data = (await res.json()) as { token?: string };
+    if (typeof data.token !== "string" || !data.token) {
+      throw new ApiError(0, "登录响应缺少 token");
+    }
+    const entry: TokenEntry = { user, token: data.token, exp: tokenExpiry(data.token) };
+    cachedToken = entry;
+    storeToken(entry);
+    return entry.token;
+  })();
+
+  loginInFlight = { user, promise };
+  try {
+    return await promise;
+  } finally {
+    if (loginInFlight?.promise === promise) loginInFlight = null;
+  }
+}
+
+/** 取当前身份可用 token：内存 → sessionStorage → 重新登录。 */
+export async function authToken(user: string): Promise<string> {
+  if (tokenValid(cachedToken) && cachedToken.user === user) return cachedToken.token;
+  const stored = loadStoredToken(user);
+  if (tokenValid(stored)) {
+    cachedToken = stored;
+    return stored.token;
+  }
+  return login(user);
+}
+
+function buildHeaders(init: RequestInit, options: RequestOptions, token: string, user: string): Headers {
+  const headers = new Headers(init.headers);
+  headers.set("Accept", "application/json");
+  headers.set("Authorization", `Bearer ${token}`);
+  headers.set("X-User", user); // 仅开发环境兜底；生产以 Authorization 为准
+  if (options.admin) headers.set("X-Admin-Token", options.adminToken ?? ADMIN_TOKEN);
+  if (init.body !== undefined && !(init.body instanceof FormData)) {
+    headers.set("Content-Type", "application/json");
+  }
+  return headers;
+}
+
+/** 统一带令牌请求；401 换一次新 token 再试，仍失败才抛给调用方。 */
+async function authFetch(
+  path: string,
+  init: RequestInit = {},
+  options: RequestOptions = {},
+  accept = "application/json",
+): Promise<Response> {
+  const user = getCurrentUser();
+
+  const attempt = async (token: string): Promise<Response> => {
+    const headers = buildHeaders(init, options, token, user);
+    headers.set("Accept", accept);
+    try {
+      return await fetch(path, { ...init, headers, cache: "no-store", signal: options.signal });
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") throw err;
+      throw new ApiError(0, `无法连接后端：${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  let res = await attempt(await authToken(user));
+  if (res.status === 401) {
+    forgetToken(user);
+    res = await attempt(await authToken(user));
+  }
+  return res;
+}
+
 async function readErrorDetail(res: Response): Promise<string> {
   const fallback = `HTTP ${res.status} ${res.statusText}`.trim();
   try {
@@ -66,21 +225,7 @@ interface RequestOptions {
 }
 
 async function request<T>(path: string, init: RequestInit = {}, options: RequestOptions = {}): Promise<T> {
-  const headers = new Headers(init.headers);
-  headers.set("Accept", "application/json");
-  headers.set("X-User", getCurrentUser());
-  if (options.admin) headers.set("X-Admin-Token", options.adminToken ?? ADMIN_TOKEN);
-  if (init.body !== undefined && !(init.body instanceof FormData)) {
-    headers.set("Content-Type", "application/json");
-  }
-
-  let res: Response;
-  try {
-    res = await fetch(path, { ...init, headers, cache: "no-store", signal: options.signal });
-  } catch (err) {
-    if (err instanceof Error && err.name === "AbortError") throw err;
-    throw new ApiError(0, `无法连接后端：${err instanceof Error ? err.message : String(err)}`);
-  }
+  const res = await authFetch(path, init, options);
 
   if (!res.ok) throw new ApiError(res.status, await readErrorDetail(res));
   if (res.status === 204) return undefined as T;
@@ -88,17 +233,8 @@ async function request<T>(path: string, init: RequestInit = {}, options: Request
 }
 
 async function requestText(path: string, options: RequestOptions = {}): Promise<string> {
-  const headers = new Headers();
-  headers.set("Accept", "text/html");
-  headers.set("X-User", getCurrentUser());
-  if (options.admin) headers.set("X-Admin-Token", ADMIN_TOKEN);
+  const res = await authFetch(path, {}, options, "text/html");
 
-  let res: Response;
-  try {
-    res = await fetch(path, { headers, cache: "no-store", signal: options.signal });
-  } catch (err) {
-    throw new ApiError(0, `无法连接后端：${err instanceof Error ? err.message : String(err)}`);
-  }
   if (!res.ok) throw new ApiError(res.status, await readErrorDetail(res));
   return res.text();
 }
@@ -206,14 +342,27 @@ export async function streamQuery(input: StreamInput, handlers: StreamHandlers):
 
   let res: Response;
   try {
+    const token = await authToken(getCurrentUser());
     res = await fetch(`/api/query/stream?${params.toString()}`, {
       method: "GET",
-      headers: { Accept: "text/event-stream", "X-User": getCurrentUser() },
+      headers: { Accept: "text/event-stream", Authorization: `Bearer ${token}`, "X-User": getCurrentUser() },
       cache: "no-store",
       signal: input.signal,
     });
+    if (res.status === 401) {
+      // 令牌过期：重签一次再开流，别把 401 误报成后端挂了
+      forgetToken(getCurrentUser());
+      const retryToken = await authToken(getCurrentUser());
+      res = await fetch(`/api/query/stream?${params.toString()}`, {
+        method: "GET",
+        headers: { Accept: "text/event-stream", Authorization: `Bearer ${retryToken}`, "X-User": getCurrentUser() },
+        cache: "no-store",
+        signal: input.signal,
+      });
+    }
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") throw err;
+    if (err instanceof ApiError) throw err;
     throw new ApiError(0, `SSE 连接失败：${err instanceof Error ? err.message : String(err)}`);
   }
 

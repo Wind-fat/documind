@@ -118,7 +118,9 @@ def aggregate(rows: list[dict]) -> dict:
         "n_cases": len(rows),
         "n_answerable": len(ans_rows),
         "n_unanswerable": len(unans_rows),
-        "recall_at_5": mean("recall_at_k"),
+        # Recall@5 只在可答题上平均：不可答题没有 gold 页，把它们算进分母会把
+        # "检索没命中" 和 "本来就没有答案" 混为一谈（context_recall / mrr 同口径）。
+        "recall_at_5": mean("recall_at_k", ans_rows),
         "context_recall": mean("context_recall", ans_rows),
         "mrr": mean("mrr", ans_rows),
         "faithfulness": mean("faithfulness", ans_rows),

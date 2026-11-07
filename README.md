@@ -5,6 +5,18 @@
 
 **状态：开发中（P0 竖切已跑通，评测报告见 `evals/reports/`）**
 
+## 界面
+
+问答台：一句"公司注册资本是多少？"，答案带 1 条引用（`[2]` → 章程第 3 页第六条），右侧 5 张证据卡各自可点开原文并高亮原句。
+
+![问答台：带页码级引用的答案与证据卡](docs/assets/qa.png)
+
+评测看板：按 strategy 分列的最新一次运行对比，指标最优格标 ▲，下方直接内嵌 `ablation.html` 报告。
+
+![评测看板：策略对比表与内嵌 ablation 报告](docs/assets/evals.png)
+
+两张图都是本机 `next start` + `uvicorn` 实跑截图（`docs/assets/`），不是设计稿。
+
 ## 为什么通用 RAG 在企业里跑不通（三个具体失败模式）
 
 1. **答不出还硬答**：招聘制度里没有"年假折现"条款，通用 RAG 会拿相邻的休假条款凑一个看起来合理的答案。
@@ -47,9 +59,41 @@ uv run documind eval --strategy structure
 cd web && npm install && npm run dev
 ```
 
+## 评测结果
+
+四种切块策略跑同一条链路（ACL → BM25 ∥ 向量 → RRF → cross-encoder 重排 → 引用约束生成），
+同一批题（每策略 20 条可答 + 8 条不可答，共 112 次评测），语料是 166 页公开公司章程，
+被测与 judge 都是 `qwen3.8-flash`，embedding / rerank 是本地 bge：
+
+| 指标 | fixed | semantic | structure | parent_child |
+|---|---|---|---|---|
+| Recall@5 | 0.950 | 0.950 | 0.900 | 0.950 |
+| Context Recall | 0.900 | 0.750 | 0.900 | 0.950 |
+| Faithfulness | 0.834 | 0.892 | 0.938 | 0.880 |
+| Answer Relevancy | 0.850 | 0.950 | 0.950 | 0.900 |
+| 引用有效率 | 1.000 | 1.000 | 0.975 | 1.000 |
+| 拒答准确率 | 1.000 | 1.000 | 1.000 | 1.000 |
+| 误拒率 | 0.150 | 0.050 | 0.000 | 0.050 |
+| P95 延迟(ms)* | 150813 | 120718 | 127578 | 73507 |
+| 单问成本($) | 0.0009 | 0.0010 | 0.0011 | 0.0012 |
+
+**一句话结论：切块策略几乎不影响 Recall@5（0.90 vs 0.95，20 题里只差 1 题），
+它影响的是"喂给模型的上下文完不完整"和"答案有没有原文依据"——Context Recall 0.75 → 0.95、
+Faithfulness 0.834 → 0.938，以及按页切块把条款切断后那 15% 的误拒。**
+
+\* 延迟是在 3 worker × 2 并发的评测负载下测的，含本地 rerank 排队；单问串行约 50s，其中本地重排约 20s。
+完整的逐题明细、拒答阈值 P-R 曲线和口径说明见 `evals/reports/ablation.md`。
+
+复现：
+
+```bash
+./.venv/Scripts/python.exe -u scripts/run_ablation_parallel.py \
+    --ans-limit 20 --unans-limit 8 --workers 3 --concurrency 2
+```
+
 ## 评测
 
-见 `evals/README.md`。四种切块策略在同一份 50–100 条自建问答集上的对比见 `evals/reports/ablation.md`。
+评测集的构建、指标口径和"诚实边界"见 `evals/README.md`；四种切块策略的详细对比见 `evals/reports/ablation.md`。
 
 ## 已知限制
 

@@ -58,7 +58,7 @@ export default function StatsPage() {
         subtitle="/stats · /health"
         right={
           <>
-            <span>X-User: {user}</span>
+            <span>Bearer · {user}</span>
             <button type="button" className="btn btn-sm" onClick={load} disabled={loading}>
               刷新
             </button>

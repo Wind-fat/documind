@@ -59,7 +59,10 @@ def _markdown(dataset: str, summary: dict, calibration: dict) -> str:
         "|---|" + "---|" * len(strategies),
     ]
     for key, label, kind in COLS:
-        row = " | ".join(_fmt(summary[s].get(key), kind) for s in strategies)
+        if key == "cost_per_query_usd":
+            row = " | ".join(f"{float(summary[s].get(key) or 0):.4f}" for s in strategies)
+        else:
+            row = " | ".join(_fmt(summary[s].get(key), kind) for s in strategies)
         lines.append(f"| {label} | {row} |")
     rec = calibration["recommended"]
     lines += [

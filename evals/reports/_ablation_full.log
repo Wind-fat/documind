@@ -1,0 +1,238 @@
+
+=== strategy=fixed workers=3 limit=None ans=20 unans=8 ===
+[fixed/s1] n=9 todo=9（已完成 0）[fixed/s0] n=10 todo=10（已完成 0）
+
+[fixed/s2] n=9 todo=9（已完成 0）
+[fixed/s0] 1/10 d617e3ae484c4ece-000 ans=Y refused=False 83s cum=83s
+[fixed/s1] 1/9 d617e3ae484c4ece-001 ans=Y refused=False 94s cum=94s
+[fixed/s2] 1/9 d617e3ae484c4ece-002 ans=Y refused=True 134s cum=134s
+[fixed/s2] 2/9 d617e3ae484c4ece-005 ans=Y refused=False 135s cum=135s
+[fixed/s0] 2/10 d617e3ae484c4ece-003 ans=Y refused=False 158s cum=158s
+[fixed/s1] 2/9 d617e3ae484c4ece-004 ans=Y refused=True 194s cum=194s
+[fixed/s2] 3/9 d617e3ae484c4ece-008 ans=Y refused=False 63s cum=197s
+[fixed/s0] 3/10 d617e3ae484c4ece-006 ans=Y refused=False 115s cum=198s
+[fixed/s1] 3/9 d617e3ae484c4ece-007 ans=Y refused=False 108s cum=202s
+[fixed/s0] 4/10 d617e3ae484c4ece-009 ans=Y refused=False 56s cum=214s
+[fixed/s2] 4/9 d617e3ae484c4ece-011 ans=Y refused=False 107s cum=242s
+[fixed/s0] 5/10 d617e3ae484c4ece-012 ans=Y refused=False 76s cum=274s
+[fixed/s1] 4/9 d617e3ae484c4ece-010 ans=Y refused=False 82s cum=275s
+[fixed/s2] 5/9 d617e3ae484c4ece-014 ans=Y refused=False 97s cum=295s
+[fixed/s1] 5/9 d617e3ae484c4ece-013 ans=Y refused=False 113s cum=315s
+[fixed/s0] 6/10 eb33b0c7bd414bf0-015 ans=Y refused=False 110s cum=324s
+[fixed/s2] 6/9 eb33b0c7bd414bf0-017 ans=Y refused=False 112s cum=354s
+[fixed/s1] 6/9 eb33b0c7bd414bf0-016 ans=Y refused=False 91s cum=366s
+[fixed/s0] 7/10 eb33b0c7bd414bf0-018 ans=Y refused=False 103s cum=377s
+[fixed/s2] 7/9 unans-000 ans=N refused=True 88s cum=383s
+[fixed/s0] 8/10 unans-001 ans=N refused=True 93s cum=416s
+[fixed/s2] 8/9 unans-003 ans=N refused=True 79s cum=434s
+[fixed/s1] 7/9 unans-002 ans=N refused=True 92s cum=459s
+[fixed/s0] 9/10 unans-004 ans=N refused=True 93s cum=470s
+[fixed/s1] 8/9 eb33b0c7bd414bf0-019 ans=Y refused=True 166s cum=481s
+[fixed/s2] 9/9 unans-006 ans=N refused=True 106s cum=489s
+[fixed/s2] finished in 489s
+[fixed/s1] 9/9 unans-005 ans=N refused=True 46s cum=504s
+[fixed/s1] finished in 504s
+[fixed/s0] 10/10 unans-007 ans=N refused=True 91s cum=507s
+[fixed/s0] finished in 507s
+[fixed] wall=512s
+
+=== strategy=semantic workers=3 limit=None ans=20 unans=8 ===
+[semantic/s2] n=9 todo=9（已完成 0）[semantic/s0] n=10 todo=10（已完成 0）
+[semantic/s1] n=9 todo=9（已完成 0）
+
+[semantic/s0] 1/10 d617e3ae484c4ece-000 ans=Y refused=False 80s cum=80s
+[semantic/s1] 1/9 d617e3ae484c4ece-001 ans=Y refused=False 103s cum=103s
+[semantic/s2] 1/9 d617e3ae484c4ece-005 ans=Y refused=False 118s cum=118s
+[semantic/s0] 2/10 d617e3ae484c4ece-003 ans=Y refused=False 120s cum=120s
+[semantic/s1] 2/9 d617e3ae484c4ece-004 ans=Y refused=False 128s cum=128s
+[semantic/s2] 2/9 d617e3ae484c4ece-002 ans=Y refused=False 133s cum=133s
+[semantic/s0] 3/10 d617e3ae484c4ece-006 ans=Y refused=False 132s cum=212s
+[semantic/s1] 3/9 d617e3ae484c4ece-007 ans=Y refused=False 114s cum=216s
+[semantic/s0] 4/10 d617e3ae484c4ece-009 ans=Y refused=False 98s cum=218s
+[semantic/s1] 4/9 d617e3ae484c4ece-010 ans=Y refused=False 106s cum=234s
+[semantic/s2] 3/9 d617e3ae484c4ece-008 ans=Y refused=False 123s cum=242s
+[semantic/s0] 5/10 d617e3ae484c4ece-012 ans=Y refused=False 39s cum=251s
+[semantic/s1] 5/9 d617e3ae484c4ece-013 ans=Y refused=False 43s cum=259s
+[semantic/s2] 4/9 d617e3ae484c4ece-011 ans=Y refused=False 129s cum=262s
+[semantic/s0] 6/10 eb33b0c7bd414bf0-015 ans=Y refused=False 74s cum=291s
+[semantic/s1] 6/9 eb33b0c7bd414bf0-016 ans=Y refused=False 66s cum=300s
+[semantic/s2] 5/9 d617e3ae484c4ece-014 ans=Y refused=False 72s cum=314s
+[semantic/s0] 7/10 eb33b0c7bd414bf0-018 ans=Y refused=False 89s cum=340s
+[semantic/s1] 7/9 eb33b0c7bd414bf0-019 ans=Y refused=True 99s cum=358s
+[semantic/s2] 6/9 eb33b0c7bd414bf0-017 ans=Y refused=False 97s cum=359s
+[semantic/s0] 8/10 unans-001 ans=N refused=True 76s cum=367s
+[semantic/s1] 8/9 unans-002 ans=N refused=True 86s cum=386s
+[semantic/s2] 7/9 unans-000 ans=N refused=True 78s cum=392s
+[semantic/s0] 9/10 unans-004 ans=N refused=True 75s cum=416s
+[semantic/s1] 9/9 unans-005 ans=N refused=True 67s cum=425s
+[semantic/s1] finished in 425s
+[semantic/s2] 8/9 unans-003 ans=N refused=True 79s cum=437s
+[semantic/s0] 10/10 unans-007 ans=N refused=True 75s cum=443s
+[semantic/s0] finished in 443s
+[semantic/s2] 9/9 unans-006 ans=N refused=True 67s cum=459s
+[semantic/s2] finished in 459s
+[semantic] wall=462s
+
+=== strategy=structure workers=3 limit=None ans=20 unans=8 ===
+[structure/s0] n=10 todo=10（已完成 0）[structure/s1] n=9 todo=9（已完成 0）[structure/s2] n=9 todo=9（已完成 0）
+
+
+[structure/s0] 1/10 d617e3ae484c4ece-003 ans=Y refused=False 84s cum=84s
+[structure/s2] 1/9 d617e3ae484c4ece-002 ans=Y refused=False 97s cum=97s
+[structure/s1] 1/9 d617e3ae484c4ece-001 ans=Y refused=False 101s cum=101s
+[structure/s2] 2/9 d617e3ae484c4ece-005 ans=Y refused=False 127s cum=127s
+[structure/s0] 2/10 d617e3ae484c4ece-000 ans=Y refused=False 131s cum=131s
+[structure/s1] 2/9 d617e3ae484c4ece-004 ans=Y refused=False 138s cum=138s
+[structure/s2] 3/9 d617e3ae484c4ece-008 ans=Y refused=False 98s cum=195s
+[structure/s1] 3/9 d617e3ae484c4ece-007 ans=Y refused=False 97s cum=198s
+[structure/s0] 3/10 d617e3ae484c4ece-009 ans=Y refused=False 94s cum=224s
+[structure/s2] 4/9 d617e3ae484c4ece-011 ans=Y refused=False 103s cum=230s
+[structure/s1] 4/9 d617e3ae484c4ece-010 ans=Y refused=False 115s cum=254s
+[structure/s2] 5/9 d617e3ae484c4ece-014 ans=Y refused=False 68s cum=263s
+[structure/s1] 5/9 d617e3ae484c4ece-013 ans=Y refused=False 71s cum=270s
+[structure/s0] 4/10 d617e3ae484c4ece-006 ans=Y refused=False 193s cum=278s
+[structure/s0] 5/10 d617e3ae484c4ece-012 ans=Y refused=False 66s cum=291s
+[structure/s1] 6/9 eb33b0c7bd414bf0-016 ans=Y refused=False 60s cum=313s
+[structure/s2] 6/9 eb33b0c7bd414bf0-017 ans=Y refused=False 99s cum=329s
+[structure/s0] 6/10 eb33b0c7bd414bf0-015 ans=Y refused=False 65s cum=342s
+[structure/s2] 7/9 unans-000 ans=N refused=True 92s cum=355s
+[structure/s0] 7/10 eb33b0c7bd414bf0-018 ans=Y refused=False 105s cum=396s
+[structure/s1] 7/9 eb33b0c7bd414bf0-019 ans=Y refused=False 127s cum=397s
+[structure/s1] 8/9 unans-002 ans=N refused=True 95s cum=409s
+[structure/s2] 8/9 unans-003 ans=N refused=True 80s cum=409s
+[structure/s0] 8/10 unans-001 ans=N refused=True 94s cum=437s
+[structure/s2] 9/9 unans-006 ans=N refused=True 104s cum=459s
+[structure/s2] finished in 459s
+[structure/s1] 9/9 unans-005 ans=N refused=True 62s cum=459s
+[structure/s1] finished in 459s
+[structure/s0] 9/10 unans-004 ans=N refused=True 76s cum=472s
+[structure/s0] 10/10 unans-007 ans=N refused=True 52s cum=489s
+[structure/s0] finished in 489s
+[structure] wall=492s
+
+=== strategy=parent_child workers=3 limit=None ans=20 unans=8 ===
+[parent_child/s2] n=9 todo=9（已完成 0）[parent_child/s1] n=9 todo=9（已完成 0）[parent_child/s0] n=10 todo=10（已完成 0）
+
+
+[parent_child/s0] 1/10 d617e3ae484c4ece-000 ans=Y refused=False 62s cum=62s
+[parent_child/s1] 1/9 d617e3ae484c4ece-001 ans=Y refused=False 77s cum=77s
+[parent_child/s2] 1/9 d617e3ae484c4ece-005 ans=Y refused=False 78s cum=78s
+[parent_child/s0] 2/10 d617e3ae484c4ece-003 ans=Y refused=False 79s cum=79s
+[parent_child/s1] 2/9 d617e3ae484c4ece-004 ans=Y refused=False 80s cum=80s
+[parent_child/s0] 3/10 d617e3ae484c4ece-009 ans=Y refused=False 39s cum=118s
+[parent_child/s2] 2/9 d617e3ae484c4ece-002 ans=Y refused=False 132s cum=132s
+[parent_child/s2] 3/9 d617e3ae484c4ece-008 ans=Y refused=False 58s cum=135s
+[parent_child/s0] 4/10 d617e3ae484c4ece-006 ans=Y refused=True 82s cum=144s
+[parent_child/s1] 3/9 d617e3ae484c4ece-010 ans=Y refused=False 71s cum=151s
+[parent_child/s0] 5/10 d617e3ae484c4ece-012 ans=Y refused=False 46s cum=163s
+[parent_child/s2] 4/9 d617e3ae484c4ece-011 ans=Y refused=False 38s cum=170s
+[parent_child/s0] 6/10 eb33b0c7bd414bf0-015 ans=Y refused=False 32s cum=176s
+[parent_child/s1] 4/9 d617e3ae484c4ece-013 ans=Y refused=False 32s cum=183s
+[parent_child/s2] 5/9 d617e3ae484c4ece-014 ans=Y refused=False 53s cum=188s
+[parent_child/s0] 7/10 eb33b0c7bd414bf0-018 ans=Y refused=False 31s cum=194s
+[parent_child/s2] 6/9 eb33b0c7bd414bf0-017 ans=Y refused=False 33s cum=203s
+[parent_child/s0] 8/10 unans-001 ans=N refused=True 33s cum=209s
+[parent_child/s1] 5/9 d617e3ae484c4ece-007 ans=Y refused=False 134s cum=211s
+[parent_child/s2] 7/9 unans-000 ans=N refused=True 28s cum=216s
+[parent_child/s1] 6/9 eb33b0c7bd414bf0-016 ans=Y refused=False 38s cum=221s
+[parent_child/s0] 9/10 unans-004 ans=N refused=True 42s cum=236s
+[parent_child/s2] 8/9 unans-003 ans=N refused=True 40s cum=242s
+[parent_child/s0] 10/10 unans-007 ans=N refused=True 44s cum=253s
+[parent_child/s0] finished in 253s
+[parent_child/s1] 7/9 unans-002 ans=N refused=True 39s cum=260s
+[parent_child/s2] 9/9 unans-006 ans=N refused=True 47s cum=263s
+[parent_child/s2] finished in 263s
+[parent_child/s1] 8/9 eb33b0c7bd414bf0-019 ans=Y refused=False 56s cum=267s
+[parent_child/s1] 9/9 unans-005 ans=N refused=True 11s cum=272s
+[parent_child/s1] finished in 272s
+[parent_child] wall=274s
+[fixed] n=28 faithfulness=0.8335 recall@5=0.6786 refusal_acc=1.0 p95=150813.0ms
+[semantic] n=28 faithfulness=0.892 recall@5=0.6786 refusal_acc=1.0 p95=120718.0ms
+[structure] n=28 faithfulness=0.9375 recall@5=0.6429 refusal_acc=1.0 p95=127578.0ms
+[parent_child] n=28 faithfulness=0.88 recall@5=0.6786 refusal_acc=1.0 p95=73507.0ms
+
+=== summary ===
+{
+  "fixed": {
+    "n_cases": 28,
+    "n_answerable": 20,
+    "n_unanswerable": 8,
+    "recall_at_5": 0.6786,
+    "context_recall": 0.9,
+    "mrr": 0.75,
+    "faithfulness": 0.8335,
+    "answer_relevancy": 0.85,
+    "citation_validity": 1.0,
+    "refusal_accuracy": 1.0,
+    "false_refusal_rate": 0.15,
+    "latency_p50_ms": 92534.0,
+    "latency_p95_ms": 150813.0,
+    "cost_per_query_usd": 0.000905,
+    "total_cost_usd": 0.0253,
+    "wall_s": 511.6
+  },
+  "semantic": {
+    "n_cases": 28,
+    "n_answerable": 20,
+    "n_unanswerable": 8,
+    "recall_at_5": 0.6786,
+    "context_recall": 0.75,
+    "mrr": 0.8267,
+    "faithfulness": 0.892,
+    "answer_relevancy": 0.95,
+    "citation_validity": 1.0,
+    "refusal_accuracy": 1.0,
+    "false_refusal_rate": 0.05,
+    "latency_p50_ms": 79322.0,
+    "latency_p95_ms": 120718.0,
+    "cost_per_query_usd": 0.001041,
+    "total_cost_usd": 0.0292,
+    "wall_s": 461.9
+  },
+  "structure": {
+    "n_cases": 28,
+    "n_answerable": 20,
+    "n_unanswerable": 8,
+    "recall_at_5": 0.6429,
+    "context_recall": 0.9,
+    "mrr": 0.7667,
+    "faithfulness": 0.9375,
+    "answer_relevancy": 0.95,
+    "citation_validity": 0.975,
+    "refusal_accuracy": 1.0,
+    "false_refusal_rate": 0.0,
+    "latency_p50_ms": 90946.0,
+    "latency_p95_ms": 127578.0,
+    "cost_per_query_usd": 0.001058,
+    "total_cost_usd": 0.0296,
+    "wall_s": 491.9
+  },
+  "parent_child": {
+    "n_cases": 28,
+    "n_answerable": 20,
+    "n_unanswerable": 8,
+    "recall_at_5": 0.6786,
+    "context_recall": 0.95,
+    "mrr": 0.7683,
+    "faithfulness": 0.88,
+    "answer_relevancy": 0.9,
+    "citation_validity": 1.0,
+    "refusal_accuracy": 1.0,
+    "false_refusal_rate": 0.05,
+    "latency_p50_ms": 41703.0,
+    "latency_p95_ms": 73507.0,
+    "cost_per_query_usd": 0.001154,
+    "total_cost_usd": 0.0323,
+    "wall_s": 273.7
+  }
+}
+
+=== 拒答阈值 ===
+{
+  "threshold": 3.4,
+  "refusal_accuracy": 1.0,
+  "false_refusal": 0.15
+}
+
+wall_total=1739s 报告: D:\code\documind\evals\reports\ablation.md
+明细: D:\code\documind\evals\reports\details-20261107-201512.json
