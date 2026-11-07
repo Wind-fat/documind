@@ -40,7 +40,9 @@ flowchart LR
   R -.-> P[(Postgres+pgvector<br/>OpenSearch / MinIO<br/>prod 适配器)]
 ```
 
-数据层在 dev 用 SQLite + 进程内索引（clone 下来零依赖可跑）；检索口径有端口，但换 Postgres+pgvector / OpenSearch 仍需改 4 处（清单见 `docs/adr/0002-hybrid-retrieval.md`），不是只改配置。见 `docs/adr/`。
+数据层在 dev 用 SQLite + 进程内索引（clone 下来零依赖可跑）；检索口径有端口且后端可注入
+（`IndexStore.get(keyword_builder=..., vector_builder=...)`，默认 `BM25Index` / `VectorIndex`），
+但换 Postgres+pgvector / OpenSearch 仍需改 4 处（清单见 `docs/adr/0002-hybrid-retrieval.md`），不是只改配置。见 `docs/adr/`。
 
 ## 快速开始
 
@@ -98,7 +100,12 @@ Faithfulness 0.834 → 0.938，以及按页切块把条款切断后那 15% 的�
 
 ## 已知限制
 
-- dev 后端是 SQLite + 进程内 BM25/向量索引，单机、单进程；多副本需换 OpenSearch/pgvector（接口已留）。
+- dev 后端是 SQLite + 进程内 BM25/向量索引，单机、单进程；多副本需换 OpenSearch/pgvector。
+  检索层的后端注入点已经留好：`IndexStore.get(keyword_builder=..., vector_builder=...)`
+  （默认 `BM25Index` / `VectorIndex`，契约见 `index.KeywordStore` / `VectorStore`，
+  可替换性由 `tests/test_ports.py::test_retrieval_runs_on_injected_fake_stores` 钉住）。
+  但**只有检索这一段可换**：`chunks.embedding` 的 BLOB 列与全表 `vstack` 组装仍在 dev 侧，
+  换后端还要改这几处，清单见 `docs/adr/0002-hybrid-retrieval.md`。
 - DoclingParser 存在但未接线（`DOCUMIND_PARSER=docling` 会在配置校验阶段直接报错），默认走 pypdf（保留精确字符偏移，便于 span 高亮）。扫描件 OCR 未接。
 - Langfuse 未配置 key 时 trace 落本地 JSONL，字段与 Langfuse 对齐。
 - 表格问答、增量索引、多租户在 P1。

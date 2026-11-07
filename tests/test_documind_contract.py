@@ -113,7 +113,7 @@ def test_slice_text_is_the_single_source_of_truth():
 
 
 def test_bm25_search_return_shape():
-    """C5：返回 [(str, float)]，按分数降序；空索引返回 []；allowed 在打分前生效。"""
+    """C5：返回 [(str, float)]，按分数降序；空索引返回 []；allowed 在端口内生效（无权 chunk 不出现）。"""
     from documind import BM25Index, IndexItem
 
     items = [
@@ -134,7 +134,7 @@ def test_bm25_search_return_shape():
     assert len(idx.search("年假 婚假", 1)) == 1
     # 空索引：不是异常，是空列表（下游 capabilities.py 依赖这条区分"无命中"）
     assert BM25Index([]).search("年假", 3) == []
-    # ACL：无权文档的分数直接不存在（不是"生成后再隐藏"）
+    # ACL：无权文档在端口内被过滤为负分/剔除，结果里不出现（不是"生成后再隐藏"）
     assert [i for i, _ in idx.search("婚假", 3, allowed={"doc-2"})] == ["b"]
     assert idx.search("婚假", 3, allowed={"doc-1"}) == []
     assert idx.search("年假", 3, allowed=set()) == []

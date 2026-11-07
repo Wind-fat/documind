@@ -4,6 +4,7 @@
 "年假可以折现吗"整串匹配不到"员工享有年假"，中文检索直接失效。字符 bigram 是把中文当无空格语言
 处理的标准做法，且不需要分词词典。
 换 OpenSearch / pgvector 时要实现的是下面两个端口（`KeywordStore` / `VectorStore`），
+注入点是 `IndexStore.get(keyword_builder=..., vector_builder=...)`（`SearchIndex.build` 转发）。
 但"接口不变"只覆盖检索这一层：dev 侧的组装（`IndexStore` 全表 vstack、`chunks.embedding` BLOB）
 仍要改，真实清单见 docs/adr/0002-hybrid-retrieval.md 与 docs/ARCH-REVIEW.md §4。
 """
@@ -13,6 +14,7 @@ from __future__ import annotations
 import math
 import re
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
@@ -78,7 +80,8 @@ class BM25Index:
                 dl = self.lengths[i] or 1.0
                 scores[i] += idf * (f * (self.k1 + 1)) / (f + self.k1 * (1 - self.b + self.b * dl / self.avgdl))
         if allowed is not None:
-            # 权限在打分之前生效：无权文档的分数直接不存在，不是"生成后再隐藏"
+            # 输出侧掩码：整表已经算完 BM25，这里把无权行置 -1，结果里既不会出现也不会以低分上榜；
+            # 省算力的前置子矩阵过滤在向量侧做（VectorIndex.search），BM25 侧不做（见 ADR-0003）
             mask = np.array([d in allowed for d in self.doc_ids])
             scores = np.where(mask, scores, -1.0)
         k = min(top_n, self.n)
@@ -110,8 +113,10 @@ class VectorIndex:
 class KeywordStore(Protocol):
     """关键词检索端口。`BM25Index` 是 dev 实现，生产换 OpenSearch。
 
-    契约两条：① 返回 (chunk_id, score) 且按分数降序；② `allowed` 是**打分前**的过滤，
-    不是返回后再隐藏——否则无权文档的分数会通过名次侧漏（见 docs/ARCH-REVIEW.md P1-01）。
+    契约两条：① 返回 (chunk_id, score) 且按分数降序；② `allowed` 必须在端口内生效，
+    无权文档的 chunk_id 不得出现在返回值里（实现可以是打分前滤行、也可以是打分后置负分掩码，
+    但**不能**返回后再由调用方隐藏——否则无权文档的名次会侧漏，见 ADR-0003）。
+    注入点：`IndexStore.get(keyword_builder=...)`，默认就是 `BM25Index`。
     """
 
     def search(self, query: str, top_n: int, allowed: set[str] | None = None) -> list[tuple[str, float]]: ...
@@ -130,6 +135,12 @@ class VectorStore(Protocol):
     ) -> list[tuple[str, float]]: ...
 
 
+# 后端工厂：组合根（`IndexStore.get`）只认这两个类型，换实现 = 换一个可调用对象。
+# 参数就是端口实现的构造入参，`BM25Index(items)` / `VectorIndex(items, matrix)` 是默认值。
+KeywordBuilder = Callable[[list[IndexItem]], KeywordStore]
+VectorBuilder = Callable[[list[IndexItem], np.ndarray], VectorStore]
+
+
 @dataclass(slots=True)
 class SearchIndex:
     """一个切块策略对应一套索引。"""
@@ -141,11 +152,18 @@ class SearchIndex:
     vector: VectorStore | None = None
 
     @classmethod
-    def build(cls, strategy: str, items: list[IndexItem], matrix: np.ndarray | None) -> SearchIndex:
+    def build(
+        cls,
+        strategy: str,
+        items: list[IndexItem],
+        matrix: np.ndarray | None,
+        keyword_builder: KeywordBuilder = BM25Index,
+        vector_builder: VectorBuilder = VectorIndex,
+    ) -> SearchIndex:
         idx = cls(strategy=strategy, items={it.id: it for it in items})
-        idx.bm25 = BM25Index(items)
+        idx.bm25 = keyword_builder(items)
         if matrix is not None and len(matrix):
-            idx.vector = VectorIndex(items, matrix)
+            idx.vector = vector_builder(items, matrix)
         return idx
 
 

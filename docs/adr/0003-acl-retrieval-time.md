@@ -10,8 +10,18 @@
 ## 决策
 
 文档级 ACL 存在 `documents.acl_roles`（角色数组，`["all"]` 表示全员可见）。
-检索时先把当前角色的可见文档集合算出来，**在 BM25 打分与向量相似度计算之前**就把无权 chunk 的行剔掉
+检索时先把当前角色的可见文档集合算出来，再把 `allowed` 交给两个检索端口
 （`index.BM25Index.search(..., allowed=...)`、`VectorIndex.search(..., allowed=...)`）。
+**两条路的过滤时机不同，安全结果一致**：
+
+- **向量侧是前置子矩阵过滤**：先按 `allowed` 取行掩码，再对子矩阵算余弦相似度，
+  无权行根本不参与计算（`VectorIndex.search`，省算力）。
+- **BM25 侧是全量打分后按 ACL 掩码置 -1**（输出侧过滤）：整表算完 BM25 分数，再
+  `scores = np.where(mask, scores, -1.0)`，低于所有正分因此不会进入 Top-N
+  （`BM25Index.search`，语义等价但不省算力）。
+
+**未做的优化**：若要让 BM25 也真前置，需要按 `allowed` 建子索引（或先按 allowed 过滤倒排表再打分）。
+万级 chunk 下全表打分的成本可接受，故当前不做；换 OpenSearch 时应改成 query filter。
 
 ## 为什么不能后置过滤
 

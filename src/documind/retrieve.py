@@ -1,8 +1,8 @@
 """检索服务：ACL → 混合召回 → RRF → rerank → 上下文组装。
 
 一次检索要能回答三个问题（也是面试会追问的三个）：
-1. 无权文档为什么不会泄露？—— `allowed` 在打分前就把无权 chunk 的行剔掉，
-   BM25 与向量两条路都一样，日志里连 id 都看不到。
+1. 无权文档为什么不会泄露？—— `allowed` 在端口内生效（向量侧前置子矩阵过滤；BM25 侧全量打分后
+   按 ACL 掩码置 -1），无权 chunk 既不出现在命中里，日志里也连 id 都看不到。
 2. 为什么还要 rerank？—— RRF 只保序不管相关性；cross-encoder 把"条款对得上但字面不重合"的找回来。
 3. 拒答阈值怎么定？—— 用 evals 跑 P-R 曲线标定（docs/adr/0004）。
 """
@@ -23,7 +23,7 @@ from .config import get_settings
 from .db import INDEX_STATE_KEY, Document, IndexState
 from .db import Chunk as ChunkRow
 from .embed import Embedder, EmbeddingSpaceMismatch, get_embedder
-from .index import IndexItem, SearchIndex, rrf_fuse
+from .index import BM25Index, IndexItem, KeywordBuilder, SearchIndex, VectorBuilder, VectorIndex, rrf_fuse
 from .rerank import Reranker, get_reranker
 
 
@@ -95,6 +95,12 @@ async def read_index_fingerprint(session: AsyncSession) -> IndexFingerprint:
     )
 
 
+def _builder_key(builder: KeywordBuilder | VectorBuilder) -> str:
+    """缓存键里的后端身份。只按 (策略, 向量空间) 分桶会让换后端后命中旧索引。"""
+    qual = getattr(builder, "__qualname__", None) or repr(builder)
+    return f"{getattr(builder, '__module__', '')}.{qual}"
+
+
 class IndexStore:
     """进程内索引缓存：按 (策略, 向量空间) 缓存，**每次 get 都比对库内指纹**（P1-04）。
 
@@ -133,10 +139,27 @@ class IndexStore:
             "② 或把 DOCUMIND_EMBED_BACKEND / DOCUMIND_EMBED_MODEL 改回建库时的配置。"
         )
 
-    async def get(self, session: AsyncSession, strategy: str, embedder: Embedder | None = None) -> SearchIndex:
+    async def get(
+        self,
+        session: AsyncSession,
+        strategy: str,
+        embedder: Embedder | None = None,
+        *,
+        keyword_builder: KeywordBuilder | None = None,
+        vector_builder: VectorBuilder | None = None,
+    ) -> SearchIndex:
+        """取（或重建）某个策略的索引。
+
+        `keyword_builder` / `vector_builder` 是唯一的后端注入点：不传就是 dev 的
+        `BM25Index` / `VectorIndex`（行为与旧版逐字节一致），要换 OpenSearch/pgvector
+        只需在调用处传一个满足 `KeywordStore` / `VectorStore` 的可调用对象。
+        构建器身份进缓存键——换了后端不能命中上一个后端建的索引。
+        """
         embedder = embedder or get_embedder()
         space = embedder.space
-        key = f"{strategy}::{space}"
+        kw_build = keyword_builder or BM25Index
+        vec_build = vector_builder or VectorIndex
+        key = f"{strategy}::{space}::{_builder_key(kw_build)}::{_builder_key(vec_build)}"
 
         # --- 跨进程失效：每次都比对库内指纹（旧实现在这里直接 return 缓存） ---
         fp = await read_index_fingerprint(session)
@@ -208,7 +231,7 @@ class IndexStore:
             )
             vecs.append(r.vector())
         matrix = np.vstack(vecs).astype(np.float32) if vecs else None
-        idx = SearchIndex.build(strategy, items, matrix)
+        idx = SearchIndex.build(strategy, items, matrix, kw_build, vec_build)
         self._cache[key] = idx
         self.builds += 1
         return idx
@@ -240,6 +263,8 @@ async def retrieve(
     embedder: Embedder | None = None,
     reranker: Reranker | None = None,
     rerank: bool = True,
+        keyword_builder: KeywordBuilder | None = None,
+        vector_builder: VectorBuilder | None = None,
 ) -> RetrievalResult:
     s = get_settings()
     top_k = top_k or s.top_k
@@ -251,7 +276,9 @@ async def retrieve(
         return RetrievalResult(latency_ms=int((time.perf_counter() - t0) * 1000), debug={"reason": "acl_empty"})
 
     embedder = embedder or get_embedder()
-    idx = await store.get(session, strategy, embedder)
+    idx = await store.get(
+        session, strategy, embedder, keyword_builder=keyword_builder, vector_builder=vector_builder
+    )
     reranker = reranker or get_reranker()
 
     qvec = (await asyncio.to_thread(embedder.embed, [query]))[0]

@@ -31,7 +31,9 @@
 2. **评测集是不是自欺欺人？** —— `evals/README.md` 的构建方法 + 已知限制：合成题、无 holdout、
    judge 与被测同模型。主动说这三条限制，比被问出来强。
 3. **10 万页怎么办？** —— 索引增量（sha256 + 文档级 rebuild）、分片（按部门/租户）、
-   检索分层（粗排 200 → 精排 20）；当前 dev 是进程内索引，接口已留 pgvector/OpenSearch。
+   检索分层（粗排 200 → 精排 20）；当前 dev 是进程内索引，检索后端有注入点
+   （`IndexStore.get(keyword_builder=, vector_builder=)`），换 pgvector/OpenSearch 只动实现，
+   但组装与列类型仍要改（ADR-0002 §切换成本）。
 4. **引用为什么能定位到 span？** —— 解析阶段保留页内字符偏移，块文本由 `slice_text` 生成（有测试钉住），
    回答后 quote 回查原文页拿真实偏移（`generate.locate_quote`），定位不到就退回块级 span，
    **绝不返回假偏移**。

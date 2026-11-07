@@ -18,10 +18,13 @@
 "换 OpenSearch / pgvector 接口不变"这句话在 2026-11 的架构复核里被判定为不成立
 （docs/ARCH-REVIEW.md A2 / P1-01），现在改成两句话：
 
-1. **检索口径有端口**：`index.KeywordStore`（`search(query, top_n, allowed)`）与
+1. **检索口径有端口，且组合根可注入**：`index.KeywordStore`（`search(query, top_n, allowed)`）与
    `index.VectorStore`（`search(query_vec, top_n, allowed)`）。`BM25Index` / `VectorIndex` 是
-   dev 实现，`SearchIndex.bm25/vector` 的注解就是这两个 Protocol，`IndexStore` 只依赖端口，
-   所以"换实现"这一层确实不需要动编排代码。
+   dev 实现，`SearchIndex.bm25/vector` 的注解就是这两个 Protocol；注入点是
+   `IndexStore.get(keyword_builder=..., vector_builder=...)`（默认值与原硬编码相同），
+   `retrieve()` 也透传这两个参数，所以"换实现"这一层确实不需要动编排代码。
+   可替换性不是口号：`tests/test_ports.py::test_retrieval_runs_on_injected_fake_stores`
+   用两个不依赖 numpy/BM25 的内存假实现跑通 `retrieve()`，并断言假实现被构造、被查询。
    （旧的 `Retriever` Protocol 已删除：它声明 `search(query: str, ...)`，与向量检索收
    `np.ndarray` 的签名不兼容，且全仓零实现零引用。）
 2. **切换成本不是"零"**：换后端仍需改 **4 处**，清单见 docs/ARCH-REVIEW.md §4 ——
