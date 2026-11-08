@@ -258,8 +258,8 @@ elapsed_ms=5188 · embedding 请求数 5 · embedding prompt_tokens 17951（供�
 3. **延迟数字混入了本机 CPU rerank**（bge-reranker-base，10 候选 ×256 token）。供应商侧
    TTFT 4.2 s、单次生成 1–5 s；19 s 那条是冷启动。要量供应商延迟必须关掉 rerank 或换远端 reranker。
    思考关那组的第 1 问 12.5 s 是冷启动离群值（比思考开那组同一问还慢），把均值压成了 −16%；看其余 4 题是 −20%~−58%，第 1 问则变慢 72% —— 单次运行的冷启动噪声足以盖过 35% 的真实差，所以延迟只能当成"方向"而不是结论。
-4. **拒答题是"文档完全没有这个主题"**，没测"文档有相似条款但应当拒答"的难例；阈值仍是
-   内置占位 `-6.0`（`source=builtin`），没有在本语料上标定。
+4. **拒答题原是「文档完全没有这个主题」**；本轮已补 2 条「文档有相似条款、答案不在」的手写难例
+   并做了阈值标定（§8），但难例只有 2 条、可答只有 15 条，**不足以定论**。标定值与它的局限见 §8。
 5. **没有换掉 reranker**，也没重跑 `documind eval` 全量评测，所以本文件的 span/拒答指标只在
    这 5 道题上成立，不能替代 `evals/reports/` 的评测结论。
 6. **供应商约束只验证了一条**：text-embedding-v3 单请求最多 10 条（25 条直接 400
@@ -269,3 +269,181 @@ elapsed_ms=5188 · embedding 请求数 5 · embedding prompt_tokens 17951（供�
    接别的兼容端点时请把两个 `*_THINKING` 设成空，别让陌生的字段把请求打成 400。
 8. 本轮没有安装任何新组件（无 tiktoken / 无 dashscope SDK）：token 数全部取上游 `usage`，
    不需要本地分词器。
+
+## 8. 拒答阈值在新 embedding 空间上的标定（2026-11-08，接 §4/§7 之后）
+
+### 8.1 为什么标定、标的是什么
+
+`/health` 里那个 `-6.0`（`source=builtin`）是旧 bge 分数域的**占位值**，不是任何一次评测的结论。
+换到 `text-embedding-v3@1024` 之后，检索分与重排分的分布都变了（本次可答题 top_score 落在
+1.58–7.57），`-6.0` 实际上等于「永不按分数拒答」，拒答全靠模型自己说"资料不足"——
+概率性的，且每次都要付一次生成调用。
+
+标定只动一件事：`EvalRun.recommended_threshold`（reranker 分桶），
+`/health` 的 `source` 由此从 `builtin` 变 `calibrated`。不调 judge、不花 LLM 钱。
+
+### 8.2 标定集怎么来的（**只做减法，不改标注**）
+
+`qa_default.jsonl` 的 67 条可答题来自 3 份章程，而 `data/real_dashscope.db` 只有
+`zhicheng_suhao.pdf` 一份（59 页 / 47 块）。直接拿全量跑，另两份文档的 gold 永远召不回来，
+那是题与语料不匹配，不是检索退化。所以：
+
+```bash
+./.venv/Scripts/python.exe scripts/build_calib_dataset.py \
+    --doc "江苏苏豪时尚集团股份有限公司章 程" \
+    --hard evals/datasets/hard_neg_suhao.jsonl \
+    -o evals/datasets/qa_suhao.jsonl
+# [build] base=87 answerable(全量)=67 → 匹配 '江苏苏豪时尚集团股份有限公司章 程': 15 · 不可答 20 · 手写难例 2 · 合计 37
+```
+
+| 组 | n | 来源 |
+|---|---|---|
+| 可答 | 15 | `qa_default.jsonl` 里 `gold_doc == 苏豪章程` 的全部题，gold_pages / gold_quote 原样保留 |
+| 不可答 | 20 | `qa_default.jsonl` 原本的固定 20 条（年假/报销/工资日…），这些内容章程里确实没有 |
+| 手写难例 | 2 | `evals/datasets/hard_neg_suhao.jsonl`：**有相似条款、答案不在** |
+
+两条难例都写了 `source` + `abs_check`（缺失验证），可复核"是不是为了让数字好看而加题"：
+
+| id | 问题 | 相似条款在哪 | 为什么答案不在 |
+|---|---|---|---|
+| `hardneg-000` | 分红后股东个人按什么**税率**交个税？ | 第 48–49 页股利派发「须在 2 个月内完成」 | 59 页全文 `个人所得税`=0、`税率`=0 |
+| `hardneg-001` | 每年给会计师事务所的**审计费用多少元**？ | 第 50 页「审计费用由股东大会或授权董事会决定」 | 只规定谁定，没有金额 |
+
+### 8.3 指标（n=37，`structure` 策略，bge-reranker-base 本机重排）
+
+```bash
+DOCUMIND_DATABASE_URL="sqlite+aiosqlite:///D:/code/documind/data/real_dashscope.db" \
+./scripts/with_dashscope.sh ./.venv/Scripts/python.exe -u scripts/eval_retrieval.py \
+    --dataset suhao --strategy structure --ans-limit 15 --unans-limit 22 --write \
+    --json evals/reports/calib_suhao.json
+```
+
+```
+[reranker] BAAI/bge-reranker-base · 拒答阈值 -6.0000（来源 builtin） · max_tokens=256 · batch=8
+[structure] recall_at_5=1.0 context_recall=1.0 mrr=0.9222 refusal_accuracy_pre_llm=0.2273
+            false_refusal_rate_pre_llm=0.0 top_score_min_answerable=1.5759
+            latency_p50_ms=2910.5 latency_p95_ms=3232.5 threshold=-6.0 threshold_source=builtin
+            recommended_threshold=1.5055 recall_at_5_hits=15/15 context_recall_hits=15/15
+[write] 已写入标定行：reranker=BAAI/bge-reranker-base recommended_threshold=1.5055 n_cases=37
+```
+
+| 指标 | 值 | 口径 |
+|---|---|---|
+| Recall@5 | **1.0（15/15）** | Top-5 命中 gold 页或 gold quote 前 30 字 |
+| Context Recall | **1.0（15/15）** | gold quote 进了喂模型的上下文 |
+| MRR | **0.9222** | 唯一失分是 1 题 gold 排到第 2 |
+| 拒答准确率（pre-LLM） | **0.2273（5/22）** | 这是**在旧阈值 -6.0 下**的实测 |
+| 误拒率（pre-LLM） | **0.0（0/15）** | 同上 |
+| recommended_threshold | **1.5055** | 误拒 ≤15% 前提下拒答准确率最高、平台上取最保守点 |
+
+分数分布（同一份 JSON 的 rows，可直接复算）：
+
+```
+可答 top_score 升序: 1.5759 1.9701 3.1413 3.2216 3.2999 4.0981 4.6983 5.4752 6.3142 6.3414 6.3831 6.5387 6.6369 6.8209 7.5705
+不可答 top_score 降序: 1.3999 -0.1004 -0.1341 -0.2981 -1.9498 -3.1252 … -7.6743 -9.1707
+```
+
+即标定值落在 **(1.3999, 1.5759) 的间隔**里，间隔只有 **0.176**：换成两套阈值后
+pre-LLM 拒答从 **5/22** 变成 **22/22**，误拒仍是 **0/15**：
+
+```
+th=-6.0000  拒答(不可答)=5/22   误拒(可答)=0/15
+th= 1.5055  拒答(不可答)=22/22  误拒(可答)=0/15
+```
+
+### 8.4 `/health`：`builtin` → `calibrated`
+
+```bash
+curl -s --noproxy '*' http://127.0.0.1:8913/health
+```
+
+标定前：
+
+```json
+"refusal_threshold": {"reranker": "BAAI/bge-reranker-base", "value": -6.0, "source": "builtin",
+  "calibrated": null, "calibrated_run": "", "calibrated_at": "", "mismatch": false,
+  "warning": "reranker=BAAI/bge-reranker-base 还没有标定值，使用内置占位 -6.0000；…"}
+```
+
+`--write` 之后（服务不用重启：阈值是每次请求按库解析的）：
+
+```json
+"refusal_threshold": {"reranker": "BAAI/bge-reranker-base", "value": 1.5055, "source": "calibrated",
+  "calibrated": 1.5055, "calibrated_run": "04ea166191d245c4",
+  "calibrated_at": "2026-11-08T00:30:36.058675", "mismatch": false, "warning": ""}
+```
+
+`eval_runs` 里的那行：
+
+```
+('04ea166191d245c4', 'retrieval-calib:structure', 'suhao', 37, 'scripts/eval_retrieval.py',
+ 'BAAI/bge-reranker-base', 1.5055, '2026-11-08 00:30:36.058675')
+```
+
+另外验了覆盖路径：`DOCUMIND_REFUSAL_THRESHOLD=-6.0` 起第二个服务时
+`source=env` 且 **`mismatch=true`**，warning 里写明覆盖值与标定值不一致——即"标定完了又被环境变量
+悄悄拉回去"这件事在 `/health` 上看得到。
+
+### 8.5 真问答：两套阈值各跑一次（5 题 + 1 条边界题）
+
+题集 `evals/datasets/threshold_probe_suhao.jsonl`：3 条可答（`real_provider_qa.jsonl` 的
+000/001/003）+ 2 条手写难例。两个服务同一份库：`-6.0` 用 `DOCUMIND_REFUSAL_THRESHOLD=-6.0`
+起在 8914（"标定前"），1.5055 起在 8913（"标定后"）。请求一律 `selfcheck=false`、无历史
+（不触发 query 改写），一题一次生成。
+
+```bash
+./.venv/Scripts/python.exe scripts/compare_thresholds_e2e.py --base-url http://127.0.0.1:8914 \
+    --label before_builtin_-6.0 --dataset evals/datasets/threshold_probe_suhao.jsonl --out data/real_run/thr_before.json
+./.venv/Scripts/python.exe scripts/compare_thresholds_e2e.py --base-url http://127.0.0.1:8913 \
+    --label after_calibrated_1.5055 --dataset evals/datasets/threshold_probe_suhao.jsonl --out data/real_run/thr_after.json
+```
+
+| 题 | 期望 | `-6.0` 判定 | `1.5055` 判定 | top_score | 引用 span(ok/valid) |
+|---|---|---|---|---|---|
+| 股利派发最迟多久 | 可答 | 答（1 引，span 1/1） | 答（1 引，span 1/1） | 6.3142 | 1/1 · 1/1 |
+| 董事会通知方式 | 可答 | 答（1 引） | 答（1 引） | 4.0981 | 1/1 · 1/1 |
+| 董监高离职能否卖股 | 可答 | 答（1 引） | 答（1 引） | 6.3414 | 1/1 · 1/1 |
+| **分红后个税税率** | 拒答 | 拒（`模型判定资料不足`，5.97 s） | 拒（`最高重排分 -0.10 低于拒答阈值 1.51`，2.16 s） | -0.1004 | — |
+| **审计费用多少钱** | 拒答 | 拒（`模型判定资料不足`，5.57 s） | 拒（`最高重排分 -0.30 低于拒答阈值 1.51`，2.79 s） | -0.2981 | — |
+| 离职提前多少天（边界） | 拒答 | 拒（`模型判定资料不足`，6.41 s） | 拒（`最高重排分 1.40 低于拒答阈值 1.51`，2.68 s） | 1.3999 | — |
+
+汇总（脚本输出）：
+
+```
+before:  questions=5 n_citations=3 span_ok=3/3 span_valid=3/3  false_refusal_rate=0.0  refusal_accuracy=1.0
+after :  questions=5 n_citations=3 span_ok=3/3 span_valid=3/3  false_refusal_rate=0.0  refusal_accuracy=1.0
+```
+
+**结论（老实说）：这一批题上两套阈值的最终判定和引用质量完全一样。**
+差别只在"谁来拒"：
+
+- 旧阈值：三题都是**走到生成之后**、由模型自己回"资料不足"（`模型判定资料不足`，5.6–6.4 s，各花一次生成）；
+- 新阈值：同样的题在 **pre-LLM** 就被分数拦下（`最高重排分 1.40 低于拒答阈值 1.51`，2.2–2.8 s，**0 次生成**）。
+
+也就是说，标定值的收益是**把概率性拒答换成确定性拒答 + 省掉生成调用**，不是"救回了原来答错的题"。
+本批 4 条可答题的引用全部 `anchored`、`span_ok`/`span_valid` 3/3、误拒 0，与 §4.4 一致。
+
+### 8.6 限制：n 小，不能外推
+
+1. **n=15 可答 / 22 不可答，其中"同域难例"只有 2 条**。15 条可答里没有一条落在 1.4–1.58 之间，
+   所以"间隔 0.176"只是这 15 条的间隔，不是分布的间隔——再来一条措辞更偏的可答题，很容易掉到
+   1.5055 以下变成误拒。**这个数值只对这份语料 + 这套切块 + 这个 reranker 成立。**
+2. **负例的域不对齐**：20 条固定不可答题是 HR 类（年假/报销/工资日），与章程的距离远大于
+   真实业务里"同一份文档内相近但没写"的问题，因此拒答准确率会偏乐观（这一点已写进
+   `evals/README.md` 的诚实边界）。
+3. **只有 1 份 PDF、只有 `structure` 一种切块**（fixed/semantic/parent_child 没在远端 embedding 上入库）。
+4. **阈值分桶的键是 reranker**，不是 embedding。换回 `lexical` 或换别的 cross-encoder 必须重标
+   （两个分数域不同，代码里 `BUILTIN_THRESHOLDS` 也是按这个名字分桶的）。
+5. **不知道"模型自己会不会拒"**：本轮没测生成侧拒答（那需要 judge）。因此不能说"关掉阈值也安全"，
+   只能说"这批题上模型确实自己拒了"。
+6. 6 题 × 2 套阈值只花了 **9 次生成调用**（`selfcheck=false`、无历史），未做重复采样，
+   措辞与延迟单次即可波动（probe-000 26.7 s 那条是 reranker 冷启动）。
+
+### 8.7 怎么补（下一轮）
+
+1. **系统造同域难例**：把章程里"有章可循但没给数值/主体"的条款扫一遍（税率、金额、时限、
+   审批人、违约后果），每条人工确认"答案确实不在"，目标 20–30 条；这一条比加可答题更能压住阈值。
+2. **补齐语料**：把 `zhicheng_meinuohua.pdf` / `zhicheng_hengxuan.pdf` 也用 dashscope 入库，
+   标定集就能回到 67 可答，间隔才有统计意义。
+3. **分开报两段拒答**：pre-LLM（阈值）与 post-LLM（模型自判）各自的贡献要分别统计，
+   否则"阈值有没有用"永远说不清——本轮已经看到两者的结论会重合。

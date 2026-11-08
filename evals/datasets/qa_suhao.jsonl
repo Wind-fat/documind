@@ -1,0 +1,37 @@
+{"id": "d617e3ae484c4ece-000", "question": "股东大会通过利润分配方案后，公司最迟要在多久内完成股利派发？", "answerable": true, "gold_doc": "江苏苏豪时尚集团股份有限公司章 程", "gold_pages": [48, 49], "gold_quote": "须在 2 个月内完成股利（或股份）的派发事项。", "source_chunk": "756eff619ee143f0", "section": "第九章 财务会计制度、利润分配和审计 > 第一节 财务会计制度"}
+{"id": "d617e3ae484c4ece-001", "question": "清算组把公司财产清理完，资产负债表和财产清单也编好了，结果发现公司财产不够还债，接下来要怎么做？", "answerable": true, "gold_doc": "江苏苏豪时尚集团股份有限公司章 程", "gold_pages": [56, 57, 58], "gold_quote": "发现公司财产不足清偿债务的，应当依法向人民法院申请宣告破产", "source_chunk": "74b4ae4af51b4444", "section": "第十一章 合并、分立、增资、减资、解散和清算 > 第二节 解散和清算"}
+{"id": "d617e3ae484c4ece-002", "question": "董事会开会通知一般有哪些方式？", "answerable": true, "gold_doc": "江苏苏豪时尚集团股份有限公司章 程", "gold_pages": [52, 53], "gold_quote": "公司召开董事会的会议通知，以书面、电话、传真、电子邮件等方式通知。", "source_chunk": "6f88a1c971154d19", "section": "第十章 通知和公告 > 第一节 通 知"}
+{"id": "d617e3ae484c4ece-003", "question": "公司董事、监事和高级管理人员离职后，能不能立刻把自己持有的公司股票卖掉？", "answerable": true, "gold_doc": "江苏苏豪时尚集团股份有限公司章 程", "gold_pages": [11, 12, 13], "gold_quote": "上述人员离职后半年内，不得转让其所持有的本公司股份。", "source_chunk": "96b94671d94b43d3", "section": "第四章 股 份 > 第三节 股份转让"}
+{"id": "d617e3ae484c4ece-004", "question": "如果董事会不同意独立董事提议开临时股东大会，接下来会怎么处理？", "answerable": true, "gold_doc": "江苏苏豪时尚集团股份有限公司章 程", "gold_pages": [19, 20], "gold_quote": "董事会不同意召开临时股东大会的，将说明理由并公告。", "source_chunk": "1fab4ab97b99462d", "section": "第五章 股东和股东大会 > 第三节 股东大会的召集"}
+{"id": "d617e3ae484c4ece-005", "question": "公司要是分立了，之前欠的债务应该找谁要？", "answerable": true, "gold_doc": "江苏苏豪时尚集团股份有限公司章 程", "gold_pages": [54, 55], "gold_quote": "公司分立前的债务由分立后的公司承担连带责任。", "source_chunk": "c7c02d8700154c84", "section": "第十一章 合并、分立、增资、减资、解散和清算 > 第一节 合并、分立、增资和减资"}
+{"id": "d617e3ae484c4ece-006", "question": "副总经理是怎么聘任的？", "answerable": true, "gold_doc": "江苏苏豪时尚集团股份有限公司章 程", "gold_pages": [41, 42], "gold_quote": "副总经理由总经理提名，董事会提名委员会进行资格审查并提出意见，由董事会聘任或解聘。", "source_chunk": "e5acda322a194894", "section": "第七章 总经理及其他高级管理人员"}
+{"id": "d617e3ae484c4ece-007", "question": "董事辞职或者任期满了之后，还要继续对公司承担忠实义务多久？", "answerable": true, "gold_doc": "江苏苏豪时尚集团股份有限公司章 程", "gold_pages": [33, 34], "gold_quote": "董事辞职生效或者任期届满后承担忠实义务的具体期限为六个月。", "source_chunk": "20331a53397243a4", "section": "第六章 董事会 > 第一节 董 事"}
+{"id": "d617e3ae484c4ece-008", "question": "公司如果要回购股份，一般可以通过什么方式？", "answerable": true, "gold_doc": "江苏苏豪时尚集团股份有限公司章 程", "gold_pages": [9, 10, 11], "gold_quote": "公司收购本公司股份，可以通过公开的集中交易方式，或者法律法规和中国证监会认可的其他方式进行。", "source_chunk": "a16126dd3b84429e", "section": "第四章 股 份 > 第二节 股份增减和回购"}
+{"id": "d617e3ae484c4ece-009", "question": "公司年度股东大会一般要在什么时间召开？", "answerable": true, "gold_doc": "江苏苏豪时尚集团股份有限公司章 程", "gold_pages": [16, 17, 18], "gold_quote": "年度股东大会每年召开 1 次，应当于上一会计年度结束后的 6 个月内举行", "source_chunk": "143e2e142d6147a4", "section": "第五章 股东和股东大会 > 第二节 股东大会的一般规定"}
+{"id": "d617e3ae484c4ece-010", "question": "董事辞职或者任期结束后，对公司的忠实义务会自动解除吗？", "answerable": true, "gold_doc": "江苏苏豪时尚集团股份有限公司章 程", "gold_pages": [34, 35], "gold_quote": "其对公司和股东承担的忠实义务，在任期结束后并不当然解除", "source_chunk": "943b38da32f14b91", "section": "第六章 董事会 > 第一节 董 事"}
+{"id": "d617e3ae484c4ece-011", "question": "董事长没法主持股东大会的时候，该由谁来主持？", "answerable": true, "gold_doc": "江苏苏豪时尚集团股份有限公司章 程", "gold_pages": [23, 24], "gold_quote": "董事长不能履行职务或不履行职务时，由副董事长主持", "source_chunk": "0975a87cc7d54cf8", "section": "第五章 股东和股东大会 > 第五节 股东大会的召开"}
+{"id": "d617e3ae484c4ece-012", "question": "股东要查阅章程或者索取资料，需要先向公司提交什么？", "answerable": true, "gold_doc": "江苏苏豪时尚集团股份有限公司章 程", "gold_pages": [13, 14], "gold_quote": "应当向公司提供证明其持有公司股份的种类以及持股数量的书面文件", "source_chunk": "73bce33fc92d458e", "section": "第五章 股东和股东大会 > 第一节 股 东"}
+{"id": "d617e3ae484c4ece-013", "question": "审计委员会的召集人需要是什么专业背景？", "answerable": true, "gold_doc": "江苏苏豪时尚集团股份有限公司章 程", "gold_pages": [35, 36], "gold_quote": "审计委员会的召集人为会计专业人士。", "source_chunk": "e8d6b54e264d4399", "section": "第六章 董事会 > 第二节 董事会"}
+{"id": "d617e3ae484c4ece-014", "question": "如果股东大会通过了派现、送股或资本公积转增股本的提案，公司要在多长时间内实施具体方案？", "answerable": true, "gold_doc": "江苏苏豪时尚集团股份有限公司章 程", "gold_pages": [30, 31, 32], "gold_quote": "股东大会通过有关派现、送股或资本公积转增股本提案的，公司将在股东大会结束后 2 个月内实施具体方案。", "source_chunk": "9740fb001e424bd1", "section": "第五章 股东和股东大会 > 第六节 股东大会的表决和决议"}
+{"id": "unans-000", "question": "年假可以折现吗？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": ""}
+{"id": "unans-001", "question": "员工每年的带薪年假有几天？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": ""}
+{"id": "unans-002", "question": "出差住宿费的报销标准是多少？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": ""}
+{"id": "unans-003", "question": "公司的年终奖一般在几月发放？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": ""}
+{"id": "unans-004", "question": "员工每月工资几号发？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": ""}
+{"id": "unans-005", "question": "试用期最长可以是多久？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": ""}
+{"id": "unans-006", "question": "公司是否提供免费午餐或餐补？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": ""}
+{"id": "unans-007", "question": "加班可以调休吗？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": ""}
+{"id": "unans-008", "question": "公司为员工缴纳五险一金的基数是多少？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": ""}
+{"id": "unans-009", "question": "股权激励计划的具体行权价格是多少？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": ""}
+{"id": "unans-010", "question": "公司是否允许远程办公？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": ""}
+{"id": "unans-011", "question": "出差坐高铁可以坐商务座吗？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": ""}
+{"id": "unans-012", "question": "公司年会的预算是多少？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": ""}
+{"id": "unans-013", "question": "内部推荐的奖金是多少？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": ""}
+{"id": "unans-014", "question": "员工的绩效考核周期是季度还是半年？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": ""}
+{"id": "unans-015", "question": "公司对吸烟区有什么规定？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": ""}
+{"id": "unans-016", "question": "员工离职需要提前多少天提出？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": ""}
+{"id": "unans-017", "question": "公司是否报销打车费？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": ""}
+{"id": "unans-018", "question": "培训期间是否有额外补贴？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": ""}
+{"id": "unans-019", "question": "公司的注册资本是多少美元？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": ""}
+{"id": "hardneg-000", "question": "股东大会通过利润分配方案分完红以后，股东个人要按什么税率缴纳个人所得税？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": "", "source": "人工构造（本轮标定新增）。相似条款：章程第九章有股利派发（第 48-49 页，\"须在 2 个月内完成股利（或股份）的派发事项\"）；答案缺失：全 59 页对「个人所得税」「税率」零命中（见 abs_check）", "abs_check": "pages 全文 grep：个人所得税=0、税率=0", "intent": "相似条款在、答案不在 → 应当拒答"}
+{"id": "hardneg-001", "question": "公司每年付给会计师事务所的审计费用具体是多少元？", "answerable": false, "gold_doc": null, "gold_pages": [], "gold_quote": "", "source": "人工构造（本轮标定新增）。相似条款：第 50 页「会计师事务所的审计费用由股东大会或股东大会决议授权董事会决定」；答案缺失：章程只规定谁来定，没有金额/区间", "abs_check": "pages 全文 grep：审计费=1 处（仅归属主体，无金额）；万元/元 金额表述在该章无对应数值", "intent": "相似条款在、金额不在 → 应当拒答（也可能被判成\"部分可答\"，见报告风险节）"}

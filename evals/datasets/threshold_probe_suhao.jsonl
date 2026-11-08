@@ -1,0 +1,5 @@
+{"id": "probe-000", "question": "股东大会通过利润分配方案后，公司最迟要在多久内完成股利派发？", "expect_refuse": false, "answerable": true, "source": "evals/datasets/real_provider_qa.jsonl#real-provider-000（原题来自 qa_default.jsonl d617e3ae484c4ece-000）"}
+{"id": "probe-001", "question": "董事会开会通知一般有哪些方式？", "expect_refuse": false, "answerable": true, "source": "evals/datasets/real_provider_qa.jsonl#real-provider-001"}
+{"id": "probe-002", "question": "公司董事、监事和高级管理人员离职后，能不能立刻把自己持有的公司股票卖掉？", "expect_refuse": false, "answerable": true, "source": "evals/datasets/real_provider_qa.jsonl#real-provider-003"}
+{"id": "probe-003", "question": "股东大会通过利润分配方案分完红以后，股东个人要按什么税率缴纳个人所得税？", "expect_refuse": true, "answerable": false, "source": "evals/datasets/hard_neg_suhao.jsonl#hardneg-000（有股利条款、无个税/税率）"}
+{"id": "probe-004", "question": "公司每年付给会计师事务所的审计费用具体是多少元？", "expect_refuse": true, "answerable": false, "source": "evals/datasets/hard_neg_suhao.jsonl#hardneg-001（有费用归属条款、无金额）"}

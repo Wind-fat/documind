@@ -66,6 +66,40 @@ uv run documind eval --dataset default --strategies structure
 产物：`evals/reports/ablation.md`（贴 README）、`ablation.html`（评测看板，`/evals/report` 直接返回它）、
 `details-<时间戳>.json`（逐题明细，含每题的检索名次/引用/成本，便于定位回归）。
 
+## 阈值标定（不调 judge，不花钱）
+
+`scripts/eval_retrieval.py --write` 用检索指标反推拒答阈值并写回 `eval_runs`
+（`reranker` 分桶），`/health` 的 `refusal_threshold.source` 随之从 `builtin` 变 `calibrated`。
+规则：**误拒率 ≤ 15% 的前提下取拒答准确率最高的阈值**，平台期取最保守点
+（`src/documind/evals/runner.py:161`）。
+
+```bash
+# 只保留与当前库匹配的可答题（默认集是 3 份 PDF 的题，库里只有 1 份）
+./.venv/Scripts/python.exe scripts/build_calib_dataset.py \
+    --doc "江苏苏豪时尚集团股份有限公司章 程" \
+    --hard evals/datasets/hard_neg_suhao.jsonl -o evals/datasets/qa_suhao.jsonl
+
+DOCUMIND_DATABASE_URL="sqlite+aiosqlite:///D:/code/documind/data/real_dashscope.db" \
+./scripts/with_dashscope.sh ./.venv/Scripts/python.exe -u scripts/eval_retrieval.py \
+    --dataset suhao --strategy structure --ans-limit 15 --unans-limit 22 --write \
+    --json evals/reports/calib_suhao.json
+```
+
+远端 embedding（`text-embedding-v3@1024`）+ 1 份章程 + `structure` 切块的一次结果
+（2026-11-08，n=37）与两套阈值的真问答对比见 `docs/REAL-PROVIDER.md` §8。摘要：
+
+| 指标 | 值 |
+|---|---|
+| Recall@5 / Context Recall | 1.0（15/15） / 1.0（15/15） |
+| MRR | 0.9222 |
+| 拒答准确率（pre-LLM，旧阈值 -6.0） | 0.2273（5/22） |
+| 误拒率（pre-LLM） | 0.0（0/15） |
+| recommended_threshold | 1.5055（可答下界 1.5759 / 不可答上界 1.3999，间隔仅 0.176） |
+
+**n 小不能外推**：15 条可答、22 条不可答（其中与章程同域的"有相似条款"难例只有 2 条），
+且只有 1 份 PDF、一种切块。1.5055 只对这份语料 + 这个 reranker 成立；20 条固定不可答题是 HR 域，
+与章程的距离偏大，拒答准确率会偏乐观。
+
 ## 诚实边界
 
 - judge 与被测模型是同一个模型（自评有偏差），已在报告里标注。
