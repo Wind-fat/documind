@@ -22,7 +22,7 @@ from .embed import EmbeddingSpaceMismatch, embedder_health
 from .parsing import EmptyDocumentError
 from .pipeline import ask, ingest_document, stream_answer
 from .retrieve import read_index_fingerprint
-from .thresholds import ThresholdState, resolve_refusal_threshold
+from .thresholds import ThresholdState, library_embed_spaces, resolve_refusal_threshold, space_mismatch
 
 app = FastAPI(title="DocuMind", version="0.1.0", description="带证据链与拒答能力的企业知识库问答")
 app.add_middleware(
@@ -33,15 +33,20 @@ app.add_middleware(
 )
 
 
-async def _threshold_state(db: AsyncSession, embed_space: str | None = None) -> ThresholdState:
+async def _threshold_state(
+    db: AsyncSession, embed_space: str | None = None, library: list[dict] | None = None
+) -> ThresholdState:
     """生效拒答阈值 + 它的来源。`reranker_name()` 不触发模型加载，/health 保持廉价。
 
     桶键是 `(reranker, embed_space)`（P1-10）：`/health` 已经算过 `embedder_health()`，
     空间直接传进来，不让阈值解析自己再问一遍。
+
+    `library`（库里的空间 + 计数，P1-11）只用于把"进程空间在库里没有数据 → 检索会 409"
+    写进警告；解析本身的优先级与 source 语义不受影响。
     """
     from .rerank import reranker_name
 
-    return await resolve_refusal_threshold(db, reranker_name(), embed_space)
+    return await resolve_refusal_threshold(db, reranker_name(), embed_space, library=library)
 
 
 @app.on_event("startup")
@@ -51,7 +56,8 @@ async def _startup() -> None:
     # 启动即解析一次阈值：标定值与环境变量不一致时，警告必须出现在服务启动日志里（P1-03）
     async with get_session_factory()() as session:
         emb = embedder_health()
-        st = await _threshold_state(session, emb["space"])
+        library = await library_embed_spaces(session)
+        st = await _threshold_state(session, emb["space"], library)
     logging.getLogger("documind.thresholds").info(
         "拒答阈值生效: %.4f（reranker=%s，向量空间=%s，来源=%s，标定值=%s）",
         st.value,
@@ -119,7 +125,11 @@ def require_admin(x_admin_token: str = Header(default="")) -> None:
 @app.get("/health")
 async def health(db: AsyncSession = Depends(get_db)) -> dict:
     emb = embedder_health()
-    thr = await _threshold_state(db, emb["space"])
+    # 库里的空间（P1-11）：/health 以前只有**进程**的空间，而 409 取决于库里有没有这个空间的数据。
+    # 两个都报出来，"为什么 source=builtin / 为什么下一句提问会 409"才能一眼对上。
+    library = await library_embed_spaces(db)
+    mismatch = space_mismatch(library, emb["space"])
+    thr = await _threshold_state(db, emb["space"], library)
     # 索引版本进 /health（P1-04）：它是**库里的**版本，不是本进程计数器，
     # 所以「进程 A 入库、进程 B 的 /health 还是旧值」这种事故在这里一眼可见。
     fp = await read_index_fingerprint(db)
@@ -131,6 +141,11 @@ async def health(db: AsyncSession = Depends(get_db)) -> dict:
         "embed_dim": emb["dim"],
         "embed_space": emb["space"],
         "embedder_backend": emb["backend"],
+        # 库里的向量空间（documents.embed_space 去重，带文档/块计数）。
+        # 空串条目 = 迁移前入库的历史文档（无指纹，检索会被 fail-fast 拦下）。
+        "library_spaces": library,
+        # 进程空间不在库里有数据的空间里 → 检索必然 409（空库不算）
+        "space_mismatch": mismatch,
         # 降级必须是可观测的：bge→hash 只能在这里被看到（P0-02）
         "degraded": ["embedder"] if emb["degraded"] else [],
         "degraded_reason": emb["degraded_reason"],

@@ -20,7 +20,7 @@ from ..embed import embedder_health
 from ..generate import answer_question
 from ..llm import LLMClient, get_llm
 from ..retrieve import retrieve
-from ..thresholds import resolve_refusal_threshold
+from ..thresholds import MIN_CALIBRATION_CASES, resolve_refusal_threshold
 from .metrics import aggregate, citation_validity, judge_answer, retrieval_metrics
 from .report import write_reports
 
@@ -119,8 +119,17 @@ async def run_eval(
     )
 
     # 标定回写：推荐的阈值必须落进 EvalRun，否则"阈值由评测集标定"只活在报告 HTML 里（P1-03）
+    # 样本量不足时**不写** recommended_threshold（留 NULL）：读侧只认 n_cases ≥ MIN 的行，
+    # 写一条永远不生效的数字只会在 /evals/runs 里制造"有标定"的假象（P1-11）。
     rec_value = float(calibration["recommended"]["threshold"])
+    provisional = bool(calibration["provisional"])
+    if provisional:
+        print(
+            f"[calibration] n_cases={calibration['n_cases']} < {calibration['min_cases']}："
+            f"推荐阈值 {rec_value:.4f} 只作参考，不写回（recommended_threshold 留 NULL）"
+        )
     for strategy, m in summary.items():
+        m["calibration_provisional"] = provisional
         session.add(
             EvalRun(
                 strategy=strategy,
@@ -131,7 +140,7 @@ async def run_eval(
                 reranker=reranker,
                 # 空间是桶键的另一半（P1-10）：不带它，这行标定在解析时不可达
                 embed_space=embedder["space"],
-                recommended_threshold=rec_value,
+                recommended_threshold=None if provisional else rec_value,
             )
         )
     await session.commit()
@@ -195,6 +204,11 @@ def calibrate_threshold(rows: list[dict], reranker: str = "") -> dict:
         "curve": curve,
         "recommended": best,
         "reranker": reranker,
+        # 样本量门槛（P1-11）：n_cases < MIN 时这只是 provisional，
+        # 不许被写回成 recommended_threshold，也不许被解析成 calibrated。
+        "n_cases": len(rows),
+        "min_cases": MIN_CALIBRATION_CASES,
+        "provisional": len(rows) < MIN_CALIBRATION_CASES,
         "grid": {"n": len(grid), "min": grid[0], "max": grid[-1], "score_min": span[0], "score_max": span[1]},
         "rule": "误拒率 ≤ 15% 的前提下，取拒答准确率最高的阈值（宁可多拒，不可错答）",
     }

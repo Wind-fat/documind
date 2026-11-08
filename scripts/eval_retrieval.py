@@ -52,17 +52,17 @@ def _pct(vals: list[float], p: float) -> float:
 
 
 async def main(args: argparse.Namespace) -> dict:
-    from documind.db import ensure_schema_compat, get_session_factory
+    from documind.db import get_session_factory, init_db
     from documind.generate import _pre_llm_refusal
     from documind.rerank import get_reranker
     from documind.retrieve import retrieve
-    from documind.thresholds import current_embed_space, resolve_refusal_threshold
+    from documind.thresholds import calibration_gate, current_embed_space, resolve_refusal_threshold
 
-    # 老库补列必须在读 eval_runs 之前跑：它不是应用启动路径，没人替它做迁移，
-    # 否则 `no such column: eval_runs.reranker` 会以裸 SQL 报错的形式炸出来。
-    added = await ensure_schema_compat()
-    if added:
-        print(f"[schema] 已为现有库补齐列: {', '.join(added)}", flush=True)
+    # 表结构必须在读写 eval_runs 之前就位。这里用 init_db 而不是 ensure_schema_compat：
+    # 后者只给**已存在的表**补列，在一个全新空 sqlite 文件上会直接
+    # `no such table: eval_runs`（脚本不是应用启动路径，没人替它建表）。
+    # init_db = create_all + 老库补列，两种库都覆盖。
+    await init_db()
 
     cases = select_cases(args.dataset, args.limit, args.ans_limit, args.unans_limit)
     reranker = get_reranker()
@@ -71,6 +71,7 @@ async def main(args: argparse.Namespace) -> dict:
     # 所以这里必须显式报出来，而不是让它默默变成一个"通用值"。
     space = current_embed_space()
     out: dict = {"reranker": reranker.name, "embed_space": space, "strategies": {}}
+    write_refusals: list[str] = []
     print(f"[space] 向量空间 {space or '（未知：标定行将无法在该库生效）'}", flush=True)
 
     async with get_session_factory()() as session:
@@ -135,39 +136,51 @@ async def main(args: argparse.Namespace) -> dict:
             }
             cal = calibrate_threshold(rows, reranker=reranker.name)
             summary["recommended_threshold"] = cal["recommended"]["threshold"]
+            # 样本量不足的推荐值只是 provisional：写回/生效都要过 calibration_gate
+            summary["provisional"] = cal["provisional"]
+            summary["min_calibration_cases"] = cal["min_cases"]
             summary["recall_at_5_hits"] = f"{int(summary['recall_at_5'] * len(ans))}/{len(ans)}"
             summary["context_recall_hits"] = f"{int(summary['context_recall'] * len(ans))}/{len(ans)}"
             out["strategies"][strategy] = {"summary": summary, "rows": rows}
             print(f"[{strategy}] " + " ".join(f"{k}={v}" for k, v in summary.items() if not k.startswith("n_")), flush=True)
 
             if getattr(args, "write", False):
-                # 标定回写：这是 P1-03 缺的那条路径——不调 judge 也能得到可追溯的阈值，
-                # 写进 eval_runs 后 /health 的 source 就从 builtin 变 calibrated。
-                from documind.db import EvalRun
+                ok, gate_reason = calibration_gate(summary["n_cases"])
+                if not ok:
+                    # 选择"拒绝写回"而不是"写一行 provisional=true"：理由见 calibration_gate
+                    write_refusals.append(f"{strategy}: {gate_reason}")
+                    print(f"[write:拒绝] [{strategy}] {gate_reason}", flush=True)
+                else:
+                    # 标定回写：这是 P1-03 缺的那条路径——不调 judge 也能得到可追溯的阈值，
+                    # 写进 eval_runs 后 /health 的 source 就从 builtin 变 calibrated。
+                    from documind.db import EvalRun
 
-                session.add(
-                    EvalRun(
-                        strategy=f"retrieval-calib:{strategy}",
-                        dataset=args.dataset,
-                        n_cases=summary["n_cases"],
-                        metrics=json.dumps(summary, ensure_ascii=False),
-                        report_path="scripts/eval_retrieval.py",
-                        reranker=reranker.name,
-                        # 空间必须落库：不带它，这一行在解析时属于"历史通用值"，永远不生效（P1-10）
-                        embed_space=space,
-                        recommended_threshold=float(summary["recommended_threshold"]),
+                    session.add(
+                        EvalRun(
+                            strategy=f"retrieval-calib:{strategy}",
+                            dataset=args.dataset,
+                            n_cases=summary["n_cases"],
+                            metrics=json.dumps(summary, ensure_ascii=False),
+                            report_path="scripts/eval_retrieval.py",
+                            reranker=reranker.name,
+                            # 空间必须落库：不带它，这一行在解析时属于"历史通用值"，永远不生效（P1-10）
+                            embed_space=space,
+                            recommended_threshold=float(summary["recommended_threshold"]),
+                        )
                     )
-                )
-                await session.commit()
-                print(
-                    f"[write] 已写入标定行：reranker={reranker.name} embed_space={space or '（空！不生效）'} "
-                    f"recommended_threshold={summary['recommended_threshold']} n_cases={summary['n_cases']}",
-                    flush=True,
-                )
+                    await session.commit()
+                    print(
+                        f"[write] 已写入标定行：reranker={reranker.name} embed_space={space or '（空！不生效）'} "
+                        f"recommended_threshold={summary['recommended_threshold']} n_cases={summary['n_cases']}",
+                        flush=True,
+                    )
 
     if args.json:
         Path(args.json).write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"[json] {args.json}")
+    if write_refusals:
+        print(f"[write] {len(write_refusals)} 条未写回：样本量不足的推荐阈值不算标定", flush=True)
+        raise SystemExit(2)
     return out
 
 

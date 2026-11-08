@@ -74,6 +74,12 @@ uv run documind eval --dataset default --strategies structure
 规则：**误拒率 ≤ 15% 的前提下取拒答准确率最高的阈值**，平台期取最保守点
 （`src/documind/evals/runner.py:161`）。
 
+**样本量门槛（P1-11）**：`n_cases < 20` 时推荐值只是 provisional，`--write` 直接拒绝
+（退出码 2，库里不留行）；读侧同样只认 `n_cases >= 20` 的行，并把它报成
+`refusal_threshold.provisional_calibration` + 警告，`source` 仍是 `builtin`。
+理由：这个量级上 P-R 曲线相邻候选点的差别由 1 道题决定，写回库再被读出来就等于把偶然数
+变成线上拒答行为。加题重跑即可，无需清理脏行。
+
 ```bash
 # 只保留与当前库匹配的可答题（默认集是 3 份 PDF 的题，库里只有 1 份）
 ./.venv/Scripts/python.exe scripts/build_calib_dataset.py \

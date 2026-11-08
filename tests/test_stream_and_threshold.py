@@ -245,7 +245,7 @@ async def test_thresholds_are_bucketed_per_reranker(db, clean_settings):
             EvalRun(
                 strategy="structure",
                 dataset="default",
-                n_cases=5,
+                n_cases=28,  # ≥ MIN_CALIBRATION_CASES(20)：小样本行按 provisional 处理，不生效
                 reranker=name,
                 embed_space=SPACE,
                 recommended_threshold=value,
@@ -269,7 +269,7 @@ async def test_env_override_beats_calibration_and_flags_mismatch(db, monkeypatch
         EvalRun(
             strategy="structure",
             dataset="default",
-            n_cases=5,
+            n_cases=28,  # ≥ MIN_CALIBRATION_CASES(20)：小样本行按 provisional 处理，不生效
             reranker="lexical",
             embed_space=SPACE,
             recommended_threshold=-4.0,
@@ -300,7 +300,7 @@ async def test_effective_threshold_changes_the_refusal_decision(db, clean_settin
         EvalRun(
             strategy="structure",
             dataset="default",
-            n_cases=5,
+            n_cases=28,  # ≥ MIN_CALIBRATION_CASES(20)：小样本行按 provisional 处理，不生效
             reranker="lexical",
             embed_space=SPACE,
             recommended_threshold=-4.0,
