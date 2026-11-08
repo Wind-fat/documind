@@ -1,0 +1,657 @@
+{
+  "reranker": "BAAI/bge-reranker-base",
+  "strategies": {
+    "structure": {
+      "summary": {
+        "n_cases": 63,
+        "n_answerable": 15,
+        "n_unanswerable": 48,
+        "recall_at_5": 1.0,
+        "context_recall": 1.0,
+        "mrr": 0.9222,
+        "refusal_accuracy_pre_llm": 0.6875,
+        "false_refusal_rate_pre_llm": 0.0,
+        "top_score_min_answerable": 1.5759,
+        "latency_p50_ms": 3247.9,
+        "latency_p95_ms": 4218.9,
+        "threshold": 1.5055,
+        "threshold_source": "calibrated",
+        "recommended_threshold": 2.7467,
+        "recall_at_5_hits": "15/15",
+        "context_recall_hits": "15/15"
+      },
+      "rows": [
+        {
+          "id": "d617e3ae484c4ece-000",
+          "answerable": true,
+          "top_score": 6.3142,
+          "refused": false,
+          "candidates": 39,
+          "recall_at_k": 1.0,
+          "context_recall": 1.0,
+          "mrr": 1.0
+        },
+        {
+          "id": "d617e3ae484c4ece-001",
+          "answerable": true,
+          "top_score": 6.3831,
+          "refused": false,
+          "candidates": 38,
+          "recall_at_k": 1.0,
+          "context_recall": 1.0,
+          "mrr": 1.0
+        },
+        {
+          "id": "d617e3ae484c4ece-002",
+          "answerable": true,
+          "top_score": 4.0981,
+          "refused": false,
+          "candidates": 40,
+          "recall_at_k": 1.0,
+          "context_recall": 1.0,
+          "mrr": 0.3333333333333333
+        },
+        {
+          "id": "d617e3ae484c4ece-003",
+          "answerable": true,
+          "top_score": 6.3414,
+          "refused": false,
+          "candidates": 38,
+          "recall_at_k": 1.0,
+          "context_recall": 1.0,
+          "mrr": 1.0
+        },
+        {
+          "id": "d617e3ae484c4ece-004",
+          "answerable": true,
+          "top_score": 6.8209,
+          "refused": false,
+          "candidates": 37,
+          "recall_at_k": 1.0,
+          "context_recall": 1.0,
+          "mrr": 1.0
+        },
+        {
+          "id": "d617e3ae484c4ece-005",
+          "answerable": true,
+          "top_score": 3.2999,
+          "refused": false,
+          "candidates": 35,
+          "recall_at_k": 1.0,
+          "context_recall": 1.0,
+          "mrr": 1.0
+        },
+        {
+          "id": "d617e3ae484c4ece-006",
+          "answerable": true,
+          "top_score": 1.9701,
+          "refused": false,
+          "candidates": 33,
+          "recall_at_k": 1.0,
+          "context_recall": 1.0,
+          "mrr": 0.5
+        },
+        {
+          "id": "d617e3ae484c4ece-007",
+          "answerable": true,
+          "top_score": 6.6369,
+          "refused": false,
+          "candidates": 40,
+          "recall_at_k": 1.0,
+          "context_recall": 1.0,
+          "mrr": 1.0
+        },
+        {
+          "id": "d617e3ae484c4ece-008",
+          "answerable": true,
+          "top_score": 3.1413,
+          "refused": false,
+          "candidates": 37,
+          "recall_at_k": 1.0,
+          "context_recall": 1.0,
+          "mrr": 1.0
+        },
+        {
+          "id": "d617e3ae484c4ece-009",
+          "answerable": true,
+          "top_score": 3.2216,
+          "refused": false,
+          "candidates": 35,
+          "recall_at_k": 1.0,
+          "context_recall": 1.0,
+          "mrr": 1.0
+        },
+        {
+          "id": "d617e3ae484c4ece-010",
+          "answerable": true,
+          "top_score": 6.5387,
+          "refused": false,
+          "candidates": 39,
+          "recall_at_k": 1.0,
+          "context_recall": 1.0,
+          "mrr": 1.0
+        },
+        {
+          "id": "d617e3ae484c4ece-011",
+          "answerable": true,
+          "top_score": 5.4752,
+          "refused": false,
+          "candidates": 37,
+          "recall_at_k": 1.0,
+          "context_recall": 1.0,
+          "mrr": 1.0
+        },
+        {
+          "id": "d617e3ae484c4ece-012",
+          "answerable": true,
+          "top_score": 4.6983,
+          "refused": false,
+          "candidates": 39,
+          "recall_at_k": 1.0,
+          "context_recall": 1.0,
+          "mrr": 1.0
+        },
+        {
+          "id": "d617e3ae484c4ece-013",
+          "answerable": true,
+          "top_score": 1.5759,
+          "refused": false,
+          "candidates": 39,
+          "recall_at_k": 1.0,
+          "context_recall": 1.0,
+          "mrr": 1.0
+        },
+        {
+          "id": "d617e3ae484c4ece-014",
+          "answerable": true,
+          "top_score": 7.5705,
+          "refused": false,
+          "candidates": 39,
+          "recall_at_k": 1.0,
+          "context_recall": 1.0,
+          "mrr": 1.0
+        },
+        {
+          "id": "unans-000",
+          "answerable": false,
+          "top_score": -5.1035,
+          "refused": true,
+          "candidates": 37,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "unans-001",
+          "answerable": false,
+          "top_score": -7.2979,
+          "refused": true,
+          "candidates": 32,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "unans-002",
+          "answerable": false,
+          "top_score": -7.6743,
+          "refused": true,
+          "candidates": 31,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "unans-003",
+          "answerable": false,
+          "top_score": -4.8353,
+          "refused": true,
+          "candidates": 37,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "unans-004",
+          "answerable": false,
+          "top_score": -4.635,
+          "refused": true,
+          "candidates": 31,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "unans-005",
+          "answerable": false,
+          "top_score": -6.3033,
+          "refused": true,
+          "candidates": 36,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "unans-006",
+          "answerable": false,
+          "top_score": -5.1709,
+          "refused": true,
+          "candidates": 38,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "unans-007",
+          "answerable": false,
+          "top_score": -7.5738,
+          "refused": true,
+          "candidates": 35,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "unans-008",
+          "answerable": false,
+          "top_score": -3.7615,
+          "refused": true,
+          "candidates": 38,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "unans-009",
+          "answerable": false,
+          "top_score": -1.9498,
+          "refused": true,
+          "candidates": 34,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "unans-010",
+          "answerable": false,
+          "top_score": -5.1195,
+          "refused": true,
+          "candidates": 41,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "unans-011",
+          "answerable": false,
+          "top_score": -9.1707,
+          "refused": true,
+          "candidates": 39,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "unans-012",
+          "answerable": false,
+          "top_score": -3.1252,
+          "refused": true,
+          "candidates": 40,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "unans-013",
+          "answerable": false,
+          "top_score": -4.7758,
+          "refused": true,
+          "candidates": 30,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "unans-014",
+          "answerable": false,
+          "top_score": -5.4574,
+          "refused": true,
+          "candidates": 31,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "unans-015",
+          "answerable": false,
+          "top_score": -3.3943,
+          "refused": true,
+          "candidates": 39,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "unans-016",
+          "answerable": false,
+          "top_score": 1.3999,
+          "refused": true,
+          "candidates": 36,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "unans-017",
+          "answerable": false,
+          "top_score": -3.9788,
+          "refused": true,
+          "candidates": 39,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "unans-018",
+          "answerable": false,
+          "top_score": -5.5634,
+          "refused": true,
+          "candidates": 37,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "unans-019",
+          "answerable": false,
+          "top_score": -0.1341,
+          "refused": true,
+          "candidates": 39,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-000",
+          "answerable": false,
+          "top_score": -0.1004,
+          "refused": true,
+          "candidates": 37,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-001",
+          "answerable": false,
+          "top_score": -0.2981,
+          "refused": true,
+          "candidates": 40,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-002",
+          "answerable": false,
+          "top_score": 5.6084,
+          "refused": false,
+          "candidates": 36,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-003",
+          "answerable": false,
+          "top_score": -3.5731,
+          "refused": true,
+          "candidates": 34,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-004",
+          "answerable": false,
+          "top_score": -1.7091,
+          "refused": true,
+          "candidates": 40,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-005",
+          "answerable": false,
+          "top_score": 3.611,
+          "refused": false,
+          "candidates": 35,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-006",
+          "answerable": false,
+          "top_score": -1.9088,
+          "refused": true,
+          "candidates": 35,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-007",
+          "answerable": false,
+          "top_score": -4.8241,
+          "refused": true,
+          "candidates": 35,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-008",
+          "answerable": false,
+          "top_score": -2.3368,
+          "refused": true,
+          "candidates": 41,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-009",
+          "answerable": false,
+          "top_score": 5.8028,
+          "refused": false,
+          "candidates": 36,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-010",
+          "answerable": false,
+          "top_score": -1.0584,
+          "refused": true,
+          "candidates": 41,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-011",
+          "answerable": false,
+          "top_score": 3.5197,
+          "refused": false,
+          "candidates": 36,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-012",
+          "answerable": false,
+          "top_score": -2.8642,
+          "refused": true,
+          "candidates": 35,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-013",
+          "answerable": false,
+          "top_score": 1.2076,
+          "refused": true,
+          "candidates": 36,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-014",
+          "answerable": false,
+          "top_score": 1.1141,
+          "refused": true,
+          "candidates": 38,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-015",
+          "answerable": false,
+          "top_score": 4.8488,
+          "refused": false,
+          "candidates": 37,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-016",
+          "answerable": false,
+          "top_score": 3.702,
+          "refused": false,
+          "candidates": 36,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-017",
+          "answerable": false,
+          "top_score": 4.2005,
+          "refused": false,
+          "candidates": 37,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-018",
+          "answerable": false,
+          "top_score": 4.2259,
+          "refused": false,
+          "candidates": 39,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-019",
+          "answerable": false,
+          "top_score": 2.7251,
+          "refused": false,
+          "candidates": 39,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-020",
+          "answerable": false,
+          "top_score": 3.5497,
+          "refused": false,
+          "candidates": 40,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-021",
+          "answerable": false,
+          "top_score": -1.5788,
+          "refused": true,
+          "candidates": 36,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-022",
+          "answerable": false,
+          "top_score": 3.4196,
+          "refused": false,
+          "candidates": 33,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-023",
+          "answerable": false,
+          "top_score": -0.1316,
+          "refused": true,
+          "candidates": 39,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-024",
+          "answerable": false,
+          "top_score": 3.2293,
+          "refused": false,
+          "candidates": 41,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-025",
+          "answerable": false,
+          "top_score": 1.8188,
+          "refused": false,
+          "candidates": 36,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-026",
+          "answerable": false,
+          "top_score": 2.1275,
+          "refused": false,
+          "candidates": 41,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        },
+        {
+          "id": "hardneg-027",
+          "answerable": false,
+          "top_score": 2.833,
+          "refused": false,
+          "candidates": 36,
+          "recall_at_k": 0.0,
+          "context_recall": 0.0,
+          "mrr": 0.0
+        }
+      ]
+    }
+  }
+}
