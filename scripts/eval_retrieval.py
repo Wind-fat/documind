@@ -93,6 +93,17 @@ async def main(args: argparse.Namespace) -> dict:
                         **rm,
                     }
                 )
+                if args.dump_hits:
+                    # 只给离线分析用（缺项信号要文本，不要分数）：与模型看到的上下文同序同源。
+                    # 按 chunk_id 去重——父子块会重复指向同一个父块。
+                    seen: set[str] = set()
+                    dumped = []
+                    for c in ret.contexts[: args.dump_hits]:
+                        if c.chunk_id in seen:
+                            continue
+                        seen.add(c.chunk_id)
+                        dumped.append({"chunk_id": c.chunk_id, "score": round(c.score, 4), "text": c.text})
+                    rows[-1]["hits"] = dumped
                 lat.append(wall)
 
             ans = [r for r in rows if r["answerable"]]
@@ -160,6 +171,13 @@ if __name__ == "__main__":
     ap.add_argument("--ans-limit", type=int, default=20)
     ap.add_argument("--unans-limit", type=int, default=8)
     ap.add_argument("--json", default=None)
+    ap.add_argument(
+        "--dump-hits",
+        type=int,
+        default=0,
+        metavar="N",
+        help="把每题前 N 条上下文（chunk_id/score/text）写进 json，供离线信号分析；0=不写",
+    )
     ap.add_argument(
         "--write",
         action="store_true",
