@@ -1,0 +1,3 @@
+# shell 脚本必须保持 LF：Windows 上 core.autocrlf=true 会把它们检出成 CRLF，
+# 随后 `#!/usr/bin/env bash\r` 在 Linux/macOS 上直接失效（本机 git-bash 里也只剩"能跑"的假象）。
+*.sh text eol=lf

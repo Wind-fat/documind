@@ -128,7 +128,7 @@ async def test_stream_events(client, loaded, monkeypatch):
         async def chat(self, messages, **kwargs):
             return LLMReply(text=json.dumps({"answer": "五天 [1]", "citations": [{"ref": 1, "quote": "员工每年享有带薪年假五天"}]}), usage=Usage(model="fake"))
 
-        async def chat_stream(self, messages, *, json_mode=False, max_tokens=None, meta=None):
+        async def chat_stream(self, messages, *, json_mode=False, max_tokens=None, meta=None, thinking=None):
             # 单块流：只验事件名与载荷契约（真流式的时序在 test_stream_and_threshold.py）
             yield json.dumps(
                 {

@@ -98,6 +98,23 @@ Faithfulness 0.834 → 0.938，以及按页切块把条款切断后那 15% 的�
 
 评测集的构建、指标口径和"诚实边界"见 `evals/README.md`；四种切块策略的详细对比见 `evals/reports/ablation.md`。
 
+## 真实供应商（可选）
+
+默认 LLM 指向本机网关、embedding 走本地 bge，clone 下来零凭据可跑。要接真供应商只改环境变量：
+
+```bash
+# 一次性把本机凭据读进子进程环境（不落盘、不打印）
+DOCUMIND_EMBED_BACKEND=dashscope ./scripts/with_dashscope.sh ./.venv/Scripts/python.exe -m uvicorn documind.app:app --port 8913
+```
+
+- LLM：任意 OpenAI 兼容端点（`DOCUMIND_LLM_BASE_URL/API_KEY/MODEL`），已验证 DashScope compatible-mode + `qwen3.8-flash`；
+- embedding：新增 `openai` / `dashscope` 后端（调 `{base}/embeddings`，批量 10 条/请求，`trust_env=False`），
+  已验证 `text-embedding-v3`（1024 维）。它与 bge/hash **共用同一套 `model@dim` 空间指纹**，
+  换后端就是换空间：库里的指纹不匹配时检索直接 409，失败**不会**静默降级到 hash；
+- 思考开关：`DOCUMIND_LLM_ANSWER_THINKING`（答案，默认开）/ `DOCUMIND_LLM_ENABLE_THINKING`（改写与自检，默认关）。
+
+实测数据（token、延迟、引用 span 命中率、思考开/关对照）与复现命令见 `docs/REAL-PROVIDER.md`。
+
 ## 已知限制
 
 - dev 后端是 SQLite + 进程内 BM25/向量索引，单机、单进程；多副本需换 OpenSearch/pgvector。

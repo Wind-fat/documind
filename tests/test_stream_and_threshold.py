@@ -67,7 +67,7 @@ class SlowStreamLLM:
         self.stream_calls = 0
         self.chat_calls = 0
 
-    async def chat_stream(self, messages, *, json_mode=False, max_tokens=None, meta=None):
+    async def chat_stream(self, messages, *, json_mode=False, max_tokens=None, meta=None, thinking=None):
         self.stream_calls += 1
         self.started_at = time.perf_counter()
         for piece in self.pieces:
@@ -181,7 +181,7 @@ async def test_stream_falls_back_to_single_shot_and_says_so(live_server, monkeyp
     from documind.llm import LLMError, LLMReply, Usage
 
     class NoStream:
-        async def chat_stream(self, messages, *, json_mode=False, max_tokens=None, meta=None):
+        async def chat_stream(self, messages, *, json_mode=False, max_tokens=None, meta=None, thinking=None):
             raise LLMError("上游拒绝流式请求（HTTP 400）：Required body invalid")
             yield ""  # pragma: no cover
 

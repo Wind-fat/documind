@@ -228,7 +228,11 @@ async def answer_question(
         return refusal
 
     prompt = prepare_prompt(query, retrieval, history)
-    reply = await llm.chat(prompt.messages, json_mode=True, max_tokens=800)
+    # 答案档的思考开关走 `llm_answer_thinking`（默认开）：这一档要产出带引用的结构化答案，
+    # 省下来的 token 不值一次引用错位。短任务（改写/自检）另走 `llm_enable_thinking`。
+    reply = await llm.chat(
+        prompt.messages, json_mode=True, max_tokens=800, thinking=s.llm_answer_thinking
+    )
     gen_ms = reply.usage.latency_ms
     if reply.usage.mocked:
         return Answer(
@@ -304,6 +308,7 @@ async def _finalize(
             ],
             json_mode=True,
             max_tokens=300,
+            thinking=get_settings().llm_enable_thinking,
         )
         try:
             verdict = parse_json(chk.text)
@@ -340,6 +345,7 @@ async def _finalize(
                 ],
                 json_mode=True,
                 max_tokens=800,
+                thinking=get_settings().llm_answer_thinking,
             )
             ans.cost_usd = round(ans.cost_usd + retry.usage.cost_usd, 8)
             try:
@@ -443,6 +449,7 @@ class AnswerStream:
         self.query = query
         self.retrieval = retrieval
         self.llm = llm
+        self.answer_thinking = s.llm_answer_thinking
         self.page_texts = page_texts
         self.history = history or []
         self.selfcheck = s.selfcheck_retry if selfcheck is None else selfcheck
@@ -470,7 +477,11 @@ class AnswerStream:
         parts: list[str] = []
         try:
             async for piece in self.llm.chat_stream(
-                prompt.messages, json_mode=True, max_tokens=800, meta=self.meta
+                prompt.messages,
+                json_mode=True,
+                max_tokens=800,
+                meta=self.meta,
+                thinking=self.answer_thinking,
             ):
                 parts.append(piece)
                 visible = extractor.feed(piece)

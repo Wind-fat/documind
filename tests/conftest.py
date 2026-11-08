@@ -107,7 +107,7 @@ class FakeLLM:
         text = self.payloads.pop(0) if self.payloads else '{"answer":"文档中未找到相关条款","citations":[],"not_found":true}'
         return LLMReply(text=text, usage=Usage(model="fake", prompt_tokens=10, completion_tokens=5, cost_usd=0.0))
 
-    async def chat_stream(self, messages, *, json_mode=False, max_tokens=None, meta=None):
+    async def chat_stream(self, messages, *, json_mode=False, max_tokens=None, meta=None, thinking=None):
         """一次性把同一份剧本当"单块流"吐出来：给不关心时序的用例用。"""
         from documind.llm import Usage
 

@@ -14,6 +14,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT = Path(__file__).resolve().parents[2]
 
+# 允许的 embedder 后端。远端档（openai / dashscope）指向同一个 OpenAI 兼容 /embeddings 实现，
+# 名字分开只是为了让 /health 与日志里能看出"这份索引是从哪家供应商建出来的"。
+EMBED_BACKENDS = frozenset({"auto", "bge", "hash", "openai", "dashscope"})
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DOCUMIND_", env_file=".env", extra="ignore")
@@ -34,6 +38,17 @@ class Settings(BaseSettings):
     # 每百万 token 单价（用于成本看板，默认取 qwen3.8-flash 公开价，单位 USD）
     price_prompt_per_mtok: float = 0.15
     price_completion_per_mtok: float = 0.47
+    # ---- 思考（reasoning）开关：纯粹的 token/延迟取舍，不是能力开关 ----
+    # `enable_thinking` 是 DashScope（Qwen3 系）请求体顶层的字段。实测同一个问题：
+    #   默认（思考开）：completion=59（其中 reasoning=33），1.7s
+    #   关：completion=31，无 reasoning，1.1s
+    # 即 completion token 与延迟都近乎减半，代价是多步推理能力下降，所以分两档：
+    # - llm_enable_thinking：**短任务**（query 改写、自检判定）的默认档，关掉更划算；
+    # - llm_answer_thinking：**答案生成**（带引用约束、可能触发自检重试）的档位，默认开。
+    # 两档都能设成空值（`DOCUMIND_..._THINKING=`）表示"不发送该字段"，交给供应商默认——
+    # 接非 DashScope 的兼容端点时不会因为未知字段 400。
+    llm_enable_thinking: bool | None = False
+    llm_answer_thinking: bool | None = True
 
     # ---- 检索 ----
     top_k: int = 5
@@ -60,12 +75,27 @@ class Settings(BaseSettings):
     selfcheck_retry: bool = True
 
     # ---- 模型 ----
-    embed_backend: str = "auto"  # auto | hash（CI / 无模型环境用 hash，报告里会标注）
+    # embed_backend：auto（本地 bge，失败降级 hash）| bge | hash |
+    #                openai / dashscope（远端 OpenAI 兼容 /embeddings，绝不降级）
+    embed_backend: str = "auto"
     rerank_backend: str = "auto"
     embed_model: str = "BAAI/bge-small-zh-v1.5"
     rerank_model: str = "BAAI/bge-reranker-base"
     model_cache_dir: Path = ROOT / ".models"
     hf_endpoint: str = "https://hf-mirror.com"
+    # ---- 远端 embedding（OpenAI 兼容 /embeddings，如 DashScope compatible-mode）----
+    # key 只从环境变量读，仓库里不放任何凭据；平台侧临时导出即可：
+    #   DOCUMIND_EMBED_API_BASE=https://dashscope.aliyuncs.com/compatible-mode/v1
+    #   DOCUMIND_EMBED_API_KEY=$DASHSCOPE_KEY DOCUMIND_EMBED_BACKEND=dashscope
+    # dim 必须与模型真实输出维度一致：返回维度不符会直接报错，不会"顺手改成实际维度"
+    # 换出另一个向量空间（那样索引指纹就失效了）。
+    embed_api_base: str = ""
+    embed_api_key: str = ""
+    embed_api_model: str = "text-embedding-v3"
+    embed_api_dim: int = 1024
+    # 批量：DashScope text-embedding-v3 单请求上限 10 条（>10 直接 400 InvalidParameter）
+    embed_api_batch: int = 10
+    embed_api_timeout_s: float = 60.0
 
     # ---- 观测 ----
     langfuse_public_key: str = ""
@@ -89,8 +119,24 @@ class Settings(BaseSettings):
             )
         raise ValueError(f"未知 parser={value!r}：当前只支持 auto（按文件后缀自动选择）")
 
+    @field_validator("embed_backend")
+    @classmethod
+    def _known_embed_backend(cls, v: str) -> str:
+        """拼错的 `DOCUMIND_EMBED_BACKEND=dashscop` 不许静默变成 bge（空间会是另一个）。"""
+        value = (v or "auto").strip().lower()
+        if value not in EMBED_BACKENDS:
+            raise ValueError(
+                f"未知 embed_backend={value!r}：可选 {sorted(EMBED_BACKENDS)}"
+            )
+        return value
+
     @field_validator(
-        "llm_timeout_s", "refusal_threshold", "refusal_rerank_threshold", mode="before"
+        "llm_timeout_s",
+        "refusal_threshold",
+        "refusal_rerank_threshold",
+        "llm_enable_thinking",
+        "llm_answer_thinking",
+        mode="before",
     )
     @classmethod
     def _blank_to_default(cls, v):

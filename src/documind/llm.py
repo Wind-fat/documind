@@ -78,6 +78,7 @@ class LLMClient:
         json_mode: bool,
         temperature: float | None,
         max_tokens: int | None,
+        thinking: bool | None = None,
     ) -> dict:
         s = self.s
         payload: dict = {
@@ -89,6 +90,14 @@ class LLMClient:
             payload["response_format"] = {"type": "json_object"}
         if max_tokens:
             payload["max_tokens"] = max_tokens
+        # 思考开关（DashScope/Qwen3 的 `enable_thinking`，请求体顶层）。三态：
+        #   None = 不发送（交给供应商默认，兼容不认这个字段的端点）；
+        #   False/True = 显式关闭/开启。
+        # 这是纯粹的成本/延迟杠杆：实测同一问题 59→31 completion token、1.7s→1.1s，
+        # 但多步推理能力会下降，所以调用点分开传（见 config.llm_enable_thinking 的注释）。
+        mode = s.llm_enable_thinking if thinking is None else thinking
+        if mode is not None:
+            payload["enable_thinking"] = bool(mode)
         return payload
 
     async def chat(
@@ -99,10 +108,15 @@ class LLMClient:
         temperature: float | None = None,
         max_tokens: int | None = None,
         allow_mock: bool = True,
+        thinking: bool | None = None,
     ) -> LLMReply:
         s = self.s
         payload = self._payload(
-            messages, json_mode=json_mode, temperature=temperature, max_tokens=max_tokens
+            messages,
+            json_mode=json_mode,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            thinking=thinking,
         )
         t0 = time.perf_counter()
         try:
@@ -138,6 +152,7 @@ class LLMClient:
         temperature: float | None = None,
         max_tokens: int | None = None,
         meta: StreamMeta | None = None,
+        thinking: bool | None = None,
     ) -> AsyncIterator[str]:
         """OpenAI 兼容 SSE：逐块 yield `delta.content`（真流式，P1-05）。
 
@@ -150,9 +165,16 @@ class LLMClient:
         s = self.s
         meta = meta or StreamMeta()
         payload = self._payload(
-            messages, json_mode=json_mode, temperature=temperature, max_tokens=max_tokens
+            messages,
+            json_mode=json_mode,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            thinking=thinking,
         )
         payload["stream"] = True
+        # 流式默认**不回** usage（OpenAI 兼容协议）：显式要，否则 /query/stream 的
+        # token 用量只能空着，报告里就只剩估算。DashScope 支持该字段（实测最后一块带 usage）。
+        payload["stream_options"] = {"include_usage": True}
         t0 = time.perf_counter()
         try:
             async with self._http().stream(
@@ -204,6 +226,9 @@ class LLMClient:
             "llm_stream",
             {
                 "model": meta.usage.model or s.llm_model,
+                # token 数与 llm 事件同口径：否则流式请求在 trace 里只剩耗时，成本无从对账
+                "prompt_tokens": meta.usage.prompt_tokens,
+                "completion_tokens": meta.usage.completion_tokens,
                 "chunks": meta.chunks,
                 "ttft_ms": meta.ttft_ms,
                 "ms": meta.usage.latency_ms,
