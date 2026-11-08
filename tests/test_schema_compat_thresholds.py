@@ -6,9 +6,11 @@
 于是 `resolve_refusal_threshold` 直接抛
 `sqlalchemy.exc.OperationalError: no such column: eval_runs.reranker`。
 
-这里钉住两件事：
+这里钉住三件事：
 1. `ensure_schema_compat` 对 eval_runs 也生效（不是只有 documents/chunks）；
-2. 补列之后 `resolve_refusal_threshold` 能正常解析（老库没有标定 → builtin 来源），不抛异常。
+2. 补列之后 `resolve_refusal_threshold` 能正常解析（老库没有标定 → builtin 来源），不抛异常；
+3. P1-10 补的 `embed_space` 列：老行取 `''`，且**不会**被当成当前空间的标定
+   （老行按"历史通用值"处理：只告警、不生效；回填走 scripts/backfill_calibration_space.py）。
 """
 
 from __future__ import annotations
@@ -39,16 +41,16 @@ async def test_legacy_eval_runs_gets_threshold_columns(tmp_path) -> None:
         )
 
     added = await ensure_schema_compat(engine)
-    assert {"eval_runs.reranker", "eval_runs.recommended_threshold"} <= set(added)
+    assert {"eval_runs.reranker", "eval_runs.recommended_threshold", "eval_runs.embed_space"} <= set(added)
 
-    # 老行不被破坏，新列取默认
+    # 老行不被破坏，新列取默认（embed_space 空串 = 迁移前的历史行）
     async with engine.connect() as conn:
         row = (
             await conn.exec_driver_sql(
-                "SELECT strategy, reranker, recommended_threshold FROM eval_runs WHERE id='old1'"
+                "SELECT strategy, reranker, embed_space, recommended_threshold FROM eval_runs WHERE id='old1'"
             )
         ).one()
-    assert row[0] == "fixed" and row[1] == "" and row[2] is None
+    assert row[0] == "fixed" and row[1] == "" and row[2] == "" and row[3] is None
 
     # 补列后阈值解析不再炸：没有标定 → builtin，并带警告
     async with sa.ext.asyncio.AsyncSession(engine) as session:
@@ -72,21 +74,34 @@ async def test_calibrated_threshold_is_read_back(tmp_path) -> None:
     await ensure_schema_compat(engine)
 
     async with engine.begin() as conn:
+        # 带空间的行 = 新写入路径；不带空间的行 = 迁移前的历史行（只告警、不生效）
         await conn.exec_driver_sql(
             "INSERT INTO eval_runs (id, strategy, dataset, n_cases, metrics, report_path, "
-            "reranker, recommended_threshold) VALUES "
-            "('run1', 'structure', 'default', 28, '{}', '', 'lexical', -4.5)"
+            "reranker, embed_space, recommended_threshold) VALUES "
+            "('run1', 'structure', 'default', 28, '{}', '', 'lexical', 'hash-bigram@512', -4.5), "
+            "('run0', 'structure', 'default', 28, '{}', '', 'lexical', '', -9.5)"
         )
 
     async with sa.ext.asyncio.AsyncSession(engine) as session:
-        state = await resolve_refusal_threshold(session, "lexical")
+        state = await resolve_refusal_threshold(session, "lexical", "hash-bigram@512")
     assert state.source == "calibrated"
-    assert state.value == pytest.approx(-4.5)
+    assert state.value == pytest.approx(-4.5), "历史行(-9.5)不许盖过同空间的新标定，也不许被采用"
     assert state.calibrated_run == "run1"
+    assert state.embed_space == "hash-bigram@512"
+    assert state.legacy_calibration is None, "命中同空间标定时不必再报老行"
 
-    # 另一个桶不许串
+    # 另一个桶不许串（reranker 不同）
     async with sa.ext.asyncio.AsyncSession(engine) as session:
-        other = await resolve_refusal_threshold(session, "BAAI/bge-reranker-base")
+        other = await resolve_refusal_threshold(session, "BAAI/bge-reranker-base", "hash-bigram@512")
     assert other.source == "builtin"
     assert other.value != pytest.approx(-4.5)
+
+    # 同 reranker、别的空间：新标定不生效，老行只告警
+    async with sa.ext.asyncio.AsyncSession(engine) as session:
+        elsewhere = await resolve_refusal_threshold(session, "lexical", "text-embedding-v3@1024")
+    assert elsewhere.source == "builtin"
+    assert elsewhere.value == pytest.approx(-6.0)
+    assert elsewhere.other_space_calibration["value"] == pytest.approx(-4.5)
+    assert elsewhere.legacy_calibration["value"] == pytest.approx(-9.5)
+    assert "未生效" in elsewhere.warning and "历史通用值" in elsewhere.warning
     await engine.dispose()

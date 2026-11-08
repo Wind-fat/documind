@@ -153,6 +153,10 @@ class EvalRun(Base):
     # 这次评测用的是哪个 reranker（阈值的桶键）与它标出来的建议阈值。
     # 没有这两列，"标定值"只活在报告 HTML 里，代码无从读取（P1-03）。
     reranker: Mapped[str] = mapped_column(String(96), default="", index=True)
+    # 阈值的另一半桶键（P1-10）：标定时库里的向量空间 `model@dim`。
+    # 语义与 documents.embed_space 同一个域（`Embedder.space`）。空串 = 迁移前的历史行，
+    # 无法证明它属于哪个空间 → 解析时按"历史通用值"处理（只告警、不生效）。
+    embed_space: Mapped[str] = mapped_column(String(96), default="", index=True)
     recommended_threshold: Mapped[float | None] = mapped_column(nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(default=_now)
 

@@ -201,7 +201,11 @@ async def _prepare(
 
 
 async def _threshold(session: AsyncSession) -> ThresholdState:
-    """当前 reranker 的生效拒答阈值（按 name 分桶，P1-03）。"""
+    """当前 (reranker, embed_space) 的生效拒答阈值（P1-03 / P1-10）。
+
+    空间由 `resolve_refusal_threshold` 从当前 embedder 取——检索刚刚用过同一个 embedder，
+    不会因此多付一次模型加载。空间拿不到时按"未知"处理：不匹配任何标定，退回内置占位。
+    """
     from .rerank import get_reranker
 
     return await resolve_refusal_threshold(session, get_reranker().name)

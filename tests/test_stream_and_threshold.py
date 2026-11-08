@@ -6,6 +6,9 @@
    一个 token 事件都产不出来，`finished_at` 也已经写完。
 2. 阈值：两个 reranker 各标各的桶，写回后生效值与标定值一致；
    环境变量覆盖时 /health 的 mismatch 必须亮。
+   桶键自 P1-10 起是 `(reranker, embed_space)`：本文件写回的行必须带上**当前测试空间**
+   （conftest 固定 hash embedder → `hash-bigram@512`），否则它们在解析时是"历史通用值"、
+   只告警不生效（那条语义由 tests/test_threshold_space_bucket.py 单独钉住）。
 """
 
 from __future__ import annotations
@@ -27,6 +30,9 @@ from documind.generate import answer_question
 from documind.pipeline import ingest_document
 from documind.retrieve import Hit, RetrievalResult
 from documind.thresholds import resolve_refusal_threshold
+
+# conftest 固定 DOCUMIND_EMBED_BACKEND=hash：所有写回行都要标这个空间才会生效
+SPACE = "hash-bigram@512"
 
 
 @pytest.fixture()
@@ -235,7 +241,16 @@ async def test_thresholds_are_bucketed_per_reranker(db, clean_settings):
 
     # 回写：EvalRun 按 reranker 各存一份
     for name, value in (("lexical", lex_th), ("bge-reranker-base", cross_th)):
-        db.add(EvalRun(strategy="structure", dataset="default", n_cases=5, reranker=name, recommended_threshold=value))
+        db.add(
+            EvalRun(
+                strategy="structure",
+                dataset="default",
+                n_cases=5,
+                reranker=name,
+                embed_space=SPACE,
+                recommended_threshold=value,
+            )
+        )
     await db.commit()
 
     st_lex = await resolve_refusal_threshold(db, "lexical")
@@ -250,7 +265,16 @@ async def test_thresholds_are_bucketed_per_reranker(db, clean_settings):
 
 
 async def test_env_override_beats_calibration_and_flags_mismatch(db, monkeypatch, clean_settings):
-    db.add(EvalRun(strategy="structure", dataset="default", n_cases=5, reranker="lexical", recommended_threshold=-4.0))
+    db.add(
+        EvalRun(
+            strategy="structure",
+            dataset="default",
+            n_cases=5,
+            reranker="lexical",
+            embed_space=SPACE,
+            recommended_threshold=-4.0,
+        )
+    )
     await db.commit()
 
     monkeypatch.setenv("DOCUMIND_REFUSAL_THRESHOLD", "1.25")
@@ -272,7 +296,16 @@ async def test_effective_threshold_changes_the_refusal_decision(db, clean_settin
     monkeypatch.delenv("DOCUMIND_REFUSAL_THRESHOLD", raising=False)
     monkeypatch.delenv("DOCUMIND_REFUSAL_RERANK_THRESHOLD", raising=False)
     get_settings.cache_clear()
-    db.add(EvalRun(strategy="structure", dataset="default", n_cases=5, reranker="lexical", recommended_threshold=-4.0))
+    db.add(
+        EvalRun(
+            strategy="structure",
+            dataset="default",
+            n_cases=5,
+            reranker="lexical",
+            embed_space=SPACE,
+            recommended_threshold=-4.0,
+        )
+    )
     await db.commit()
     st = await resolve_refusal_threshold(db, "lexical")
     assert st.value == pytest.approx(-4.0)

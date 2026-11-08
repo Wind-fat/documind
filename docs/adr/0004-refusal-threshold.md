@@ -42,3 +42,20 @@
    覆盖值与标定值不一致时打 WARNING，并在 `/health.refusal_threshold.mismatch` 亮出。
 4. **网格由数据决定**：按 top_score 的分位数生成，覆盖 `[min-1, max+1]`，
    不再写死 `[-14, 0]`（那个区间扫不到 cross-encoder 的正值侧）。
+
+## 修订（P1-10，2026-11）：桶键加向量空间
+
+**事实**：2026-11-08 的交叉验证把同一份标定值搬到第二份文档上，可答题最低分从 1.5759 掉到 0.0706，
+同域难例只拒 10/24。**阈值不跨库**，而当时的桶键只有 `reranker`——换库时会静默继承旧值。
+
+**决策**：桶键 = `(reranker.name, embed_space)`，`eval_runs` 增 `embed_space` 列。
+
+1. 解析：当前空间有标定才用；没有就退回内置占位，并把"别的空间有值但未生效"作为
+   `other_space_calibration` + `warning` 报出来（`/health`、启动日志、检索路径同一份解析）。
+2. 迁移前的行 `embed_space=''`：**只告警、不生效**（无标注的行无法证明属于哪个空间，
+   自动归属等于重现跨库继承）。回填是一条显式命令：`scripts/backfill_calibration_space.py`，
+   默认取库自身的 `documents.embed_space` 而不是进程的空间。
+3. 写路径：`evals/runner.py` 与 `scripts/eval_retrieval.py --write` 都带空间落库。
+
+**没有解决**：两份语料共用同一个 embedder 时空间相同，标定值仍会互相生效（真实数据就是这种情况）。
+跨语料隔离需要语料维度的桶键，本 ADR 不做——不要用"已按空间分桶"当作跨库问题已解决的证据。

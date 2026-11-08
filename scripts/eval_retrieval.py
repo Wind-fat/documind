@@ -56,7 +56,7 @@ async def main(args: argparse.Namespace) -> dict:
     from documind.generate import _pre_llm_refusal
     from documind.rerank import get_reranker
     from documind.retrieve import retrieve
-    from documind.thresholds import resolve_refusal_threshold
+    from documind.thresholds import current_embed_space, resolve_refusal_threshold
 
     # 老库补列必须在读 eval_runs 之前跑：它不是应用启动路径，没人替它做迁移，
     # 否则 `no such column: eval_runs.reranker` 会以裸 SQL 报错的形式炸出来。
@@ -66,10 +66,15 @@ async def main(args: argparse.Namespace) -> dict:
 
     cases = select_cases(args.dataset, args.limit, args.ans_limit, args.unans_limit)
     reranker = get_reranker()
-    out: dict = {"reranker": reranker.name, "strategies": {}}
+    # 阈值的桶键是 (reranker, embed_space)：本轮跑的库用哪个向量空间，标定值就写回哪个空间。
+    # 拿不到 embedder 时空串不会被当成桶键（`latest_calibration` 拒绝查空空间），
+    # 所以这里必须显式报出来，而不是让它默默变成一个"通用值"。
+    space = current_embed_space()
+    out: dict = {"reranker": reranker.name, "embed_space": space, "strategies": {}}
+    print(f"[space] 向量空间 {space or '（未知：标定行将无法在该库生效）'}", flush=True)
 
     async with get_session_factory()() as session:
-        thr = await resolve_refusal_threshold(session, reranker.name)
+        thr = await resolve_refusal_threshold(session, reranker.name, space)
         print(f"[reranker] {reranker.name} · 拒答阈值 {thr.value:.4f}（来源 {thr.source}）"
               f" · max_tokens={getattr(reranker, 'max_tokens', '-')}"
               f" · batch={getattr(reranker, 'batch_size', '-')}", flush=True)
@@ -126,6 +131,7 @@ async def main(args: argparse.Namespace) -> dict:
                 "latency_p95_ms": round(_pct(lat, 0.95), 1),
                 "threshold": thr.value,
                 "threshold_source": thr.source,
+                "embed_space": space,
             }
             cal = calibrate_threshold(rows, reranker=reranker.name)
             summary["recommended_threshold"] = cal["recommended"]["threshold"]
@@ -147,12 +153,14 @@ async def main(args: argparse.Namespace) -> dict:
                         metrics=json.dumps(summary, ensure_ascii=False),
                         report_path="scripts/eval_retrieval.py",
                         reranker=reranker.name,
+                        # 空间必须落库：不带它，这一行在解析时属于"历史通用值"，永远不生效（P1-10）
+                        embed_space=space,
                         recommended_threshold=float(summary["recommended_threshold"]),
                     )
                 )
                 await session.commit()
                 print(
-                    f"[write] 已写入标定行：reranker={reranker.name} "
+                    f"[write] 已写入标定行：reranker={reranker.name} embed_space={space or '（空！不生效）'} "
                     f"recommended_threshold={summary['recommended_threshold']} n_cases={summary['n_cases']}",
                     flush=True,
                 )

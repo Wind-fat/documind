@@ -69,7 +69,8 @@ uv run documind eval --dataset default --strategies structure
 ## 阈值标定（不调 judge，不花钱）
 
 `scripts/eval_retrieval.py --write` 用检索指标反推拒答阈值并写回 `eval_runs`
-（`reranker` 分桶），`/health` 的 `refusal_threshold.source` 随之从 `builtin` 变 `calibrated`。
+（`(reranker, embed_space)` 分桶，见文末"阈值桶键"一节；本节写作时桶键还只有 `reranker`），
+`/health` 的 `refusal_threshold.source` 随之从 `builtin` 变 `calibrated`。
 规则：**误拒率 ≤ 15% 的前提下取拒答准确率最高的阈值**，平台期取最保守点
 （`src/documind/evals/runner.py:161`）。
 
@@ -185,8 +186,11 @@ n=63（15 可答 / 48 不可答 = 28 同域难例 + 20 HR 固定），`structure
 
 `--write` **没有执行**：推荐值相对旧值变动 +82%（1.5055 → 2.7467），且 B/C 都建立在
 "可答下界 < 不可答上界"不成立的前提下，属于"会推翻上一轮结论"的改动，按流程交主控定。
-`eval_runs` 仍只有 2026-11-08 00:30 那行 1.5055，`resolve_refusal_threshold` 复核仍返回
+`eval_runs` 仍只有 2026-11-08 00:30 那行 1.5055，当时 `resolve_refusal_threshold` 复核返回
 `value=1.5055 source=calibrated`。
+
+> 2026-11-08 之后（P1-10）这行**不再自动生效**：它没有 `embed_space` 标注，按"历史通用值"只告警。
+> 回填后仍是 1.5055/calibrated。见文末"阈值桶键：从 `reranker` 到 `(reranker, embed_space)`"。
 
 ### 结论
 
@@ -425,6 +429,113 @@ DOCUMIND_DATABASE_URL="sqlite+aiosqlite:///D:/code/documind/data/meinuohua_dashs
   不依赖词面重合的判别器（或改为对 top-k 全查、只在全都缺时才判拒）之前，默认路径不该接。
 - 若一定要接，唯一可接受形态是"只做提示、不做拒答"（在回答里加"文档未给出具体数值"的免责），
   或把 `subject` 意图整个关掉（两份文档上 5/14，几乎等于没接）。
+
+## 阈值桶键：从 `reranker` 到 `(reranker, embed_space)`（本次）
+
+上一节最后一条结论是"阈值本身不跨文档"。这一节把那条结论变成**结构上的约束**：
+`eval_runs` 加 `embed_space`，`resolve_refusal_threshold` 按 `(reranker, embed_space)` 查最近一次标定。
+
+| 场景 | 现在的行为 | `/health.refusal_threshold` |
+|---|---|---|
+| 当前空间有标定 | 用它（`source=calibrated`） | `calibrated_spaces` 含当前空间，`warning=""` |
+| 当前空间无标定、别的空间有 | **不用**别的空间的值，退回 builtin | `other_space_calibration` 报出那个值 + `warning` 写明"未生效" |
+| 只有迁移前的行（`embed_space=''`） | **不用**（无法证明属于哪个空间），退回 builtin | `legacy_calibration` 报出那条行 + `warning` 给出回填命令 |
+| `DOCUMIND_REFUSAL_THRESHOLD` 已设置 | 覆盖（优先级最高） | `source=env`；与本空间标定不一致时 `mismatch=true` |
+
+`reason` 字段始终回答"为什么现在生效的是这个值"；`warning` 只在需要动作时非空。
+
+### 迁移：老库的行不自动生效
+
+`data/real_dashscope.db`（suhao 库）里那条 `1.5055` 是 P1-10 之前写的，`embed_space` 为空。
+升级后 `/health` 会变成 `source=builtin`、`value=-6.0`，并报出那条历史行：
+
+```bash
+DOCUMIND_DATABASE_URL="sqlite+aiosqlite:///D:/code/documind/data/real_dashscope.db" \
+./scripts/with_dashscope.sh ./.venv/Scripts/python.exe -m uvicorn documind.app:app --port 8961
+curl -s http://127.0.0.1:8961/health | jq .refusal_threshold
+# {"reranker":"BAAI/bge-reranker-base","value":-6.0,"source":"builtin",
+#  "calibrated":null, ... ,
+#  "warning":"... 另有 1 条无空间标注的历史标定行 value=1.5055（eval_run=04ea166191d245c4，数据集 suhao，
+#  2026-11-08T00:30:36.058675），按“历史通用值”处理：只告警、不生效（无标注的行无法证明属于哪个空间，
+#  猜错就等于跨库继承）。确认它属于哪个空间后跑
+#  `python scripts/backfill_calibration_space.py --space <model@dim>` 回填",
+#  "legacy_calibration":{"embed_space":"","value":1.5055,"run":"04ea166191d245c4","dataset":"suhao", ...}}
+```
+
+回填是一条命令，且**默认读库自己的空间**而不是进程的（换过 backend 时进程的空间常常不是库的空间，
+拿它回填等于把错的空间写进历史行）：
+
+```bash
+DOCUMIND_DATABASE_URL="sqlite+aiosqlite:///D:/code/documind/data/real_dashscope.db" \
+./.venv/Scripts/python.exe scripts/backfill_calibration_space.py --dry-run
+# [library] 库里的向量空间: ['text-embedding-v3@1024']
+# [warn] 当前进程的 embedder 空间是 BAAI/bge-small-zh-v1.5@512，与回填空间 text-embedding-v3@1024 不同（不影响写入）
+# [plan] 回填空间 text-embedding-v3@1024，影响 1 行：
+#   - 04ea166191d245c4 ... threshold=1.5055 ...
+# [dry-run] 未写入。
+```
+
+去掉 `--dry-run` 之后 `/health` 变成 `source=calibrated`、`value=1.5055`、`calibrated_spaces=["text-embedding-v3@1024"]`。
+
+### 三种 `/health` 输出（真实，2026-11-08）
+
+**① 老库：历史行只告警不生效**（`data/real_dashscope.db` 的副本，未回填；embedder=dashscope）
+
+```json
+{"embed_space":"text-embedding-v3@1024",
+ "refusal_threshold":{"reranker":"BAAI/bge-reranker-base","value":-6.0,"source":"builtin",
+  "calibrated":null,"calibrated_run":"","calibrated_at":"","calibrated_dataset":"",
+  "mismatch":false,
+  "warning":"reranker=BAAI/bge-reranker-base · 向量空间 text-embedding-v3@1024 还没有标定值，使用内置占位 -6.0000；跑一次 `documind eval` 才有可追溯的阈值。另有 1 条无空间标注的历史标定行 value=1.5055（eval_run=04ea166191d245c4，数据集 suhao，2026-11-08T00:30:36.058675），按“历史通用值”处理：只告警、不生效（无标注的行无法证明属于哪个空间，猜错就等于跨库继承）。确认它属于哪个空间后跑 `python scripts/backfill_calibration_space.py --space <model@dim>` 回填",
+  "embed_space":"text-embedding-v3@1024","calibrated_spaces":[],
+  "other_space_calibration":null,
+  "legacy_calibration":{"embed_space":"","value":1.5055,"run":"04ea166191d245c4","at":"2026-11-08T00:30:36.058675","dataset":"suhao"},
+  "reason":"reranker=BAAI/bge-reranker-base · 向量空间 text-embedding-v3@1024 没有任何可生效的标定值（该空间无标定、仅有无空间标注的历史行不用），故使用内置占位 -6.0000"}}
+```
+
+**② 换空间：别的空间的 1.5055 不继承**（同一个库，但进程跑在 hash 空间）
+
+```json
+{"embed_space":"hash-bigram@512",
+ "refusal_threshold":{"reranker":"BAAI/bge-reranker-base","value":-6.0,"source":"builtin",
+  "calibrated":null,"mismatch":false,
+  "warning":"向量空间 hash-bigram@512 还没有标定值，拒答阈值退回内置占位 -6.0000；已知空间 text-embedding-v3@1024 有标定值 value=1.5055（eval_run=04ea166191d245c4，数据集 suhao，2026-11-08T00:30:36.058675），但**未生效**——阈值不跨空间继承（不同空间的 top_score 分布整体平移，同一数值落到这里会变成另一个误拒/漏拒水平）；要在 hash-bigram@512 上生效，需在该空间重跑一次标定",
+  "embed_space":"hash-bigram@512","calibrated_spaces":["text-embedding-v3@1024"],
+  "other_space_calibration":{"embed_space":"text-embedding-v3@1024","value":1.5055,"run":"04ea166191d245c4","at":"2026-11-08T00:30:36.058675","dataset":"suhao"},
+  "legacy_calibration":null,
+  "reason":"reranker=BAAI/bge-reranker-base · 向量空间 hash-bigram@512 没有任何可生效的标定值（该空间无标定、其它空间有但按空间隔离不用），故使用内置占位 -6.0000"}}
+```
+
+**③ 同空间已标定：生效**（同一副本回填 `text-embedding-v3@1024` 之后）
+
+```json
+{"embed_space":"text-embedding-v3@1024",
+ "refusal_threshold":{"reranker":"BAAI/bge-reranker-base","value":1.5055,"source":"calibrated",
+  "calibrated":1.5055,"calibrated_run":"04ea166191d245c4","calibrated_at":"2026-11-08T00:30:36.058675",
+  "calibrated_dataset":"suhao","mismatch":false,"warning":"",
+  "embed_space":"text-embedding-v3@1024","calibrated_spaces":["text-embedding-v3@1024"],
+  "other_space_calibration":null,"legacy_calibration":null,
+  "reason":"reranker=BAAI/bge-reranker-base · 向量空间 text-embedding-v3@1024 最近一次标定（eval_run=04ea166191d245c4，数据集 suhao，2026-11-08T00:30:36.058675）写回 1.5055；同空间没有更新的标定，环境变量未设置"}}
+```
+
+### 回归测试
+
+`tests/test_threshold_space_bucket.py`（7 条），其中两条是这一节的事实：
+
+- `test_suhao_threshold_does_not_leak_into_meinuohua_space`：`1.5055`（无论带空间还是历史行）在
+  另一个空间上解析时 `source=builtin`、`value=-6.0`、`calibrated=None`，且 `warning` 写明"未生效"。
+- `test_same_space_different_corpus_still_shares`：**把边界也钉住** —— suhao 与美诺华用的是同一个
+  `text-embedding-v3@1024`，所以空间分桶**拦不住**这条真实泄漏路径。它能生效的前提是那两批块在同一个库里；
+  真跨库时 `eval_runs` 不共享，才没有实际泄漏。要在同一库里隔离两份语料，桶键还需要语料维度（未做）。
+
+### 已知未覆盖（写在这里而不是藏起来）
+
+1. `(reranker, embed_space)` 只区分"换 embedder"，不区分"同 embedder 换语料"。真实数据里 suhao 与美诺华
+   同空间，同一份 1.5055 在后者上误拒 2/26、同域难例只拒 10/24。
+2. 标定行没有"这份语料有多少题/多少页"的门槛，`n_cases` 只进 `metrics`，解析时不看。用小样本标出来的值
+   与 63 题标出来的值在 `/health` 里长得一样（只有 `calibrated_dataset` 能提示来源）。
+3. `eval_retrieval.py` 在一个**全新空库**上仍会因 `eval_runs` 不存在而报 `no such table`（它只补列不建表）；
+   用已存在的库或在之前跑一次 `init_db` 不受影响。这是既有行为，本单没改。
 
 ## 诚实边界
 

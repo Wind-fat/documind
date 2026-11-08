@@ -83,13 +83,17 @@ async def run_eval(
     summary: dict[str, dict] = {}
     details: dict[str, list[dict]] = {}
 
-    # 阈值按 reranker.name 分桶（P1-03）：评测用的阈值必须是"当前实际生效"的那个，
-    # 否则报告里的 refusal_accuracy 与线上行为不是同一个判定。
+    # 阈值按 (reranker, embed_space) 分桶（P1-03 / P1-10）：评测用的阈值必须是"当前实际生效"
+    # 的那个，否则报告里的 refusal_accuracy 与线上行为不是同一个判定。
     from ..rerank import get_reranker
 
     reranker = get_reranker().name
-    thr = await resolve_refusal_threshold(session, reranker)
-    print(f"[reranker] {reranker} · 拒答阈值 {thr.value:.4f}（来源 {thr.source}）")
+    embedder = embedder_health()
+    thr = await resolve_refusal_threshold(session, reranker, embedder["space"])
+    print(
+        f"[reranker] {reranker} · 向量空间 {embedder['space']} · "
+        f"拒答阈值 {thr.value:.4f}（来源 {thr.source}）"
+    )
 
     async def run_one(case: dict, strategy: str) -> dict:
         async with sem:
@@ -107,7 +111,6 @@ async def run_eval(
               f"p95={summary[strategy]['latency_p95_ms']}ms")
 
     calibration = calibrate_threshold([r for rows in details.values() for r in rows], reranker=reranker)
-    embedder = embedder_health()
     # 每份报告都要能回答"这组数字是用哪个 embedder 跑的"：同时进报告与 EvalRun.metrics
     for strategy in summary:
         summary[strategy]["embedder"] = embedder
@@ -126,6 +129,8 @@ async def run_eval(
                 metrics=json.dumps(m, ensure_ascii=False),
                 report_path=str(report["markdown"]),
                 reranker=reranker,
+                # 空间是桶键的另一半（P1-10）：不带它，这行标定在解析时不可达
+                embed_space=embedder["space"],
                 recommended_threshold=rec_value,
             )
         )
@@ -134,6 +139,7 @@ async def run_eval(
         "summary": summary,
         "calibration": calibration,
         "reranker": reranker,
+        "embed_space": embedder["space"],
         "recommended_threshold": rec_value,
         **report,
         "details": details,

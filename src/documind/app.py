@@ -33,11 +33,15 @@ app.add_middleware(
 )
 
 
-async def _threshold_state(db: AsyncSession) -> ThresholdState:
-    """生效拒答阈值 + 它的来源。`reranker_name()` 不触发模型加载，/health 保持廉价。"""
+async def _threshold_state(db: AsyncSession, embed_space: str | None = None) -> ThresholdState:
+    """生效拒答阈值 + 它的来源。`reranker_name()` 不触发模型加载，/health 保持廉价。
+
+    桶键是 `(reranker, embed_space)`（P1-10）：`/health` 已经算过 `embedder_health()`，
+    空间直接传进来，不让阈值解析自己再问一遍。
+    """
     from .rerank import reranker_name
 
-    return await resolve_refusal_threshold(db, reranker_name())
+    return await resolve_refusal_threshold(db, reranker_name(), embed_space)
 
 
 @app.on_event("startup")
@@ -46,11 +50,13 @@ async def _startup() -> None:
     await init_db()
     # 启动即解析一次阈值：标定值与环境变量不一致时，警告必须出现在服务启动日志里（P1-03）
     async with get_session_factory()() as session:
-        st = await _threshold_state(session)
+        emb = embedder_health()
+        st = await _threshold_state(session, emb["space"])
     logging.getLogger("documind.thresholds").info(
-        "拒答阈值生效: %.4f（reranker=%s，来源=%s，标定值=%s）",
+        "拒答阈值生效: %.4f（reranker=%s，向量空间=%s，来源=%s，标定值=%s）",
         st.value,
         st.reranker,
+        st.embed_space or "（未知）",
         st.source,
         st.calibrated,
     )
@@ -113,7 +119,7 @@ def require_admin(x_admin_token: str = Header(default="")) -> None:
 @app.get("/health")
 async def health(db: AsyncSession = Depends(get_db)) -> dict:
     emb = embedder_health()
-    thr = await _threshold_state(db)
+    thr = await _threshold_state(db, emb["space"])
     # 索引版本进 /health（P1-04）：它是**库里的**版本，不是本进程计数器，
     # 所以「进程 A 入库、进程 B 的 /health 还是旧值」这种事故在这里一眼可见。
     fp = await read_index_fingerprint(db)
@@ -408,6 +414,8 @@ async def eval_runs(db: AsyncSession = Depends(get_db)) -> list[dict]:
                         "report_path": r.report_path,
                         # 标定回写：阈值现在是可查询的事实，而不是报告里的一段文字（P1-03）
                         "reranker": r.reranker,
+                        # 空间是阈值桶键的另一半（P1-10）：空串 = 迁移前的历史行（不生效）
+                        "embed_space": r.embed_space or "",
                         "recommended_threshold": r.recommended_threshold,
                     }
         for r in rows

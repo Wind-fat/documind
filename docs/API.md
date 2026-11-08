@@ -25,15 +25,49 @@
 `degraded` 非空表示发生了自动降级（目前只有 `embedder`：bge 拉不下来退到 hash），原因在 `degraded_reason`。
 **别忽略这一项**：降级后检索质量会掉，而接口仍返回 200。
 
-`refusal_threshold` 是**当前实际生效**的拒答阈值与它的来源（P1-03）：
+`refusal_threshold` 是**当前实际生效**的拒答阈值与它的来源（P1-03 / P1-10）。桶键是
+**`(reranker, embed_space)` 两项**，不是只有 reranker：
+
+```json
+"refusal_threshold":{
+  "reranker":"BAAI/bge-reranker-base","value":-6.0,"source":"builtin",
+  "calibrated":null,"calibrated_run":"","calibrated_at":"","calibrated_dataset":"",
+  "mismatch":false,
+  "warning":"向量空间 hash-bigram@512 还没有标定值，拒答阈值退回内置占位 -6.0000；已知空间 text-embedding-v3@1024 有标定值 value=1.5055（eval_run=04ea1661，数据集 suhao，2026-11-08T00:30:36），但**未生效**——阈值不跨空间继承 ……",
+  "embed_space":"hash-bigram@512",
+  "calibrated_spaces":["text-embedding-v3@1024"],
+  "other_space_calibration":{"embed_space":"text-embedding-v3@1024","value":1.5055,"run":"04ea1661","at":"2026-11-08T00:30:36","dataset":"suhao"},
+  "legacy_calibration":null,
+  "reason":"reranker=BAAI/bge-reranker-base · 向量空间 hash-bigram@512 没有任何可生效的标定值（该空间无标定、其它空间有但按空间隔离不用），故使用内置占位 -6.0000"
+}
+```
+
+| 字段 | 含义 |
+|---|---|
+| `reranker` / `value` / `source` / `calibrated` / `calibrated_run` / `calibrated_at` / `mismatch` / `warning` | P1-03 原有字段，语义未变 |
+| `embed_space` | 解析时用的向量空间（桶键的另一半），与顶层 `embed_space` 一致；空串 = embedder 不可用、空间未知 |
+| `calibrated_spaces` | 该 reranker 已知**有标定**的空间列表（不含迁移前的空空间行）；`embed_space` 不在里面就说明本空间没有标定 |
+| `other_space_calibration` | 别的空间上最新的一条标定：**仅供参考、未生效**（`null` = 没有） |
+| `legacy_calibration` | `embed_space=''` 的历史行（迁移前写入）：**只告警、不生效**（`null` = 没有） |
+| `reason` | 为什么现在生效的是这个值（始终有内容，含 `source=calibrated` 的正常路径） |
+| `calibrated_dataset` | 这条标定是在哪份数据集上标的（同空间不同语料是已知未覆盖的边界，见下） |
 
 | `source` | 含义 |
 |---|---|
-| `env` | `DOCUMIND_REFUSAL_THRESHOLD` 显式覆盖（优先）。与最近标定值不一致时 `mismatch=true`、`warning` 写明两者与 eval_run id |
-| `calibrated` | 该 reranker 最近一次评测标定写回的 `eval_runs.recommended_threshold` |
-| `builtin` | 从未标定过，用的是内置占位（`warning` 会提示"跑一次 documind eval"） |
+| `env` | `DOCUMIND_REFUSAL_THRESHOLD` 显式覆盖（优先）。与**本空间**最近标定值不一致时 `mismatch=true`、`warning` 写明两者、空间与 eval_run id |
+| `calibrated` | `(reranker, embed_space)` 桶里最近一次标定写回的 `eval_runs.recommended_threshold` |
+| `builtin` | 本空间没有可生效的标定值，用的是内置占位（`warning` 说明是"从未标定"、"别的空间有但未生效"，还是"只有无空间标注的历史行"） |
 
-阈值按 `reranker.name` 分桶（`lexical` / `BAAI/bge-reranker-base` 各一套），换重排后端不会静默沿用另一个域的数值。
+规则（P1-10，`src/documind/thresholds.py`）：
+
+- **不跨空间继承**：当前空间没有标定时，别的空间的值一律不生效，只作为 `other_space_calibration` 报出来。
+  2026-11-08 的交叉验证就是这条规则的来历：同一条 1.5055 换一份文档后可答题最低分从 1.5759 掉到
+  0.0706、同域难例只拒 10/24（`evals/README.md` §第二份文档交叉验证）。
+- **迁移前的行（`embed_space=''`）只告警不生效**：无标注的行无法证明属于哪个空间，自动猜一个等于
+  重现跨库继承。确认空间后跑 `scripts/backfill_calibration_space.py`（默认取库里 `documents.embed_space`
+  的唯一值，不取进程的空间）回填，回填后 `/health` 立刻变 `calibrated`。
+- **已知未覆盖**：两份语料共用同一个 embedder 时空间相同，标定值仍会互相生效——空间分桶拦的是
+  "换 embedder"，不是"换语料"。跨语料的隔离需要语料维度的桶键（尚未实现，见 `evals/README.md`）。
 
 ## GET /documents
 ```json
@@ -151,10 +185,13 @@ data: {Answer}                   ← 权威结果，字段与 POST /query 完全
 ```json
 [{"id":"r1","strategy":"structure","dataset":"default","n_cases":100,
   "metrics":{"recall_at_5":0.79,"faithfulness":0.92,...},"created_at":"...","report_path":"...",
-  "reranker":"BAAI/bge-reranker-base","recommended_threshold":-4.25}]
+  "reranker":"BAAI/bge-reranker-base","embed_space":"text-embedding-v3@1024",
+  "recommended_threshold":-4.25}]
 ```
-`reranker` + `recommended_threshold` 是标定回写（P1-03）：阈值按 `reranker.name` 分桶，
-`POST /evals/run` 结束时把推荐值落库，服务启动/检索时按当前 reranker 取最近一次。
+`reranker` + `embed_space` + `recommended_threshold` 是标定回写（P1-03 / P1-10）：阈值按
+`(reranker.name, embed_space)` 分桶，`POST /evals/run` / `scripts/eval_retrieval.py --write` 结束时把
+推荐值与当时的向量空间一起落库，服务启动/检索时按当前 `(reranker, 空间)` 取最近一次。
+`embed_space` 为空串 = 迁移前的历史行，**不生效**（只告警），用 `scripts/backfill_calibration_space.py` 回填。
 环境变量 `DOCUMIND_REFUSAL_THRESHOLD` 可显式覆盖（不一致会在 `/health.refusal_threshold.mismatch` 亮出）。
 
 ## POST /evals/run  (需 admin token)
