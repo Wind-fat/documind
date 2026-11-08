@@ -1,0 +1,4 @@
+reranker=BAAI/bge-reranker-base 还没有标定值，使用内置占位 -6.0000；跑一次 `documind eval` 才有可追溯的阈值
+[reranker] BAAI/bge-reranker-base · 拒答阈值 -6.0000（来源 builtin） · max_tokens=256 · batch=8
+[structure] recall_at_5=1.0 context_recall=1.0 mrr=0.9808 refusal_accuracy_pre_llm=0.1364 false_refusal_rate_pre_llm=0.0 top_score_min_answerable=0.0706 latency_p50_ms=2540.9 latency_p95_ms=2927.3 threshold=-6.0 threshold_source=builtin recommended_threshold=1.5471 recall_at_5_hits=26/26 context_recall_hits=26/26
+[json] evals/reports/calib_meinuohua_hits.json

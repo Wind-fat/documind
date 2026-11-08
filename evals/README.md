@@ -267,8 +267,169 @@ OR 只多 1 条：章程里"由…决定"太密）。唯一误拒是 `qa-007`：
 4. **它确实抓到了单阈值抓不到的东西**：15 条"分数高于可答下界"的难例里，有 7 条被 `sentence` 口径
    判了缺项——这正是上一节说"只能换信号"的那 15 条。
 
+## 第二份文档交叉验证：信号在新文档上还成立吗（本次）
+
+上一轮的结论卡在一句话上：19/28 里有多少是稳定增益、多少是对那 28 条题形状的拟合，分不清——
+因为**没有第二份文档**。这一节把同一套信号搬到另一份章程（`zhicheng_meinuohua.pdf`，
+宁波美诺华，50 页）上重跑一次。**信号代码一行没改**，改的只有语料和题。
+
+### 1. 第二份文档入库（独立库，不碰 `real_dashscope.db`）
+
+```bash
+DOCUMIND_DATABASE_URL="sqlite+aiosqlite:///D:/code/documind/data/meinuohua_dashscope.db" \
+./scripts/with_dashscope.sh ./.venv/Scripts/python.exe scripts/ingest_eval_doc.py \
+    --pdf evals/datasets/zhicheng_meinuohua.pdf --strategy structure
+```
+
+| 项 | 值 |
+|---|---|
+| 库 | `data/meinuohua_dashscope.db`（新建；suhao 库与其 `eval_runs` 未动） |
+| 页 / 段 / 字数 | 50 页 / 304 段 / 31 835 字（去空白 30 946） |
+| 块（structure） | **52** 块，parents 0，平均 610.6 字符、最长 899 |
+| embedding 成本 | **6 个请求 / 19 797 tokens**（供应商 `usage.prompt_tokens`，非估算） |
+| 耗时 | **6 197 ms**（解析 + 切块 + 向量化 + 落库） |
+| 空间指纹 | `text-embedding-v3@1024`（与 suhao 库同空间，但不能混库） |
+
+`scripts/ingest_eval_doc.py` 是新加的：`ingest_corpus.py` 固定灌 3 份、`reingest_one.py` 只删重灌同库，
+两者都会写进"当前库"；交叉验证要求第二份文档有自己的库，否则两套块混在一个检索空间里。
+
+### 2. 题从哪来（可答 26 / 同域难例 24 / HR 20）
+
+- **可答 26 条**：`qa_default.jsonl` 里 `gold_doc == 宁波美诺华药业股份有限公司章 程` 的题，**原样保留**，
+  一条没改。逐条复核 `gold_quote` 是否在其 `gold_pages` 原文里：**26/26 命中**（机器校验，见下）。
+  这批题是上一轮造题流程产出的、在**信号实现之前**就存在，所以它是成本端（误拒）的独立样本。
+
+```bash
+./.venv/Scripts/python.exe - <<'PY'
+import json, re, sqlite3
+con = sqlite3.connect("file:data/meinuohua_dashscope.db?mode=ro", uri=True)
+pages = {int(n): (t or "") for n, t in con.execute("select page_no, text from pages")}
+norm = lambda s: re.sub(r"\s+", "", s or "")  # noqa: E731
+cases = [json.loads(l) for l in open("evals/datasets/qa_default.jsonl", encoding="utf-8") if l.strip()]
+mine = [c for c in cases if c["answerable"] and c.get("gold_doc") == "宁波美诺华药业股份有限公司章 程"]
+bad = [c["id"] for c in mine if not any(norm(c["gold_quote"]) in norm(pages.get(p, "")) for p in c["gold_pages"])]
+print(f"可答 {len(mine)} 条 · gold_quote 不在 gold_pages 原文的: {len(bad)}", bad)
+PY
+# 可答 26 条 · gold_quote 不在 gold_pages 原文的: 0 []
+```
+- **同域难例 24 条**：新建 `evals/datasets/hard_neg_meinuohua.jsonl`，四类各 6 条，
+  全部从美诺华章程的**原文条款**里造（做法与 `hard_neg_suhao.jsonl` 相同：条款在、值不在）。
+  **没有改动**原有 28 条及其标注；`qa_default.jsonl` 也没动。
+- **HR 固定 20 条**：原样拼进来，让"域外距离"那一列可比。
+
+机检**复用**现有脚本（没有复制一份改改）：`verify_hard_neg.py` 本来就带 `--dataset` / `--db`。
+
+```bash
+./.venv/Scripts/python.exe scripts/verify_hard_neg.py \
+    --dataset evals/datasets/hard_neg_meinuohua.jsonl --db data/meinuohua_dashscope.db
+# [hard-neg] n=24 页数=50 全文=30946 字
+# [分类] rate=6 · amount=6 · deadline=6 · subject=6
+# [有争议] 3 条: hardneg-mnh-003, hardneg-mnh-009, hardneg-mnh-016
+# [OK] 24/24 条通过：出处逐字可核 · 缺失词全文零命中 · 条款无数量词（除显式豁免）
+```
+
+四类样例（每条都带 `source_page` / `source_quote` / `anchor` / `abs_terms`）：
+
+| 类 | 例 | 相似条款（页） | 缺的那一项 |
+|---|---|---|---|
+| rate | 任意公积金按什么比例提取 | 第一百五十五条（39） | 条款只写"还可以提取"，同页有法定公积金 10%/50% |
+| amount | 员工持股计划最多授予多少股 | 第四十六条（14） | 只列股东会审议权，无授予数量 |
+| deadline | 内审制度批准后几日内披露 | 第一百五十九条（43） | 只写"批准后实施并披露" |
+| subject | 内审负责人由谁聘任解聘 | 第一百六十四条（43） | 只写"审计委员会参与考核" |
+
+```bash
+./.venv/Scripts/python.exe scripts/build_calib_dataset.py \
+    --doc "宁波美诺华药业股份有限公司章 程" --hard evals/datasets/hard_neg_meinuohua.jsonl \
+    -o evals/datasets/qa_meinuohua.jsonl
+# [build] → 匹配 26 · 不可答 20 · 手写难例 24 · 合计 70
+```
+
+### 3. 检索 + 四组合（同一脚本，`--threshold 1.5055`）
+
+```bash
+DOCUMIND_DATABASE_URL="sqlite+aiosqlite:///D:/code/documind/data/meinuohua_dashscope.db" \
+./scripts/with_dashscope.sh ./.venv/Scripts/python.exe -u scripts/eval_retrieval.py \
+    --dataset meinuohua --strategy structure --ans-limit 26 --unans-limit 44 --dump-hits 5 \
+    --json evals/reports/calib_meinuohua_hits.json
+./.venv/Scripts/python.exe scripts/refusal_signal_report.py \
+    --json evals/reports/calib_meinuohua_hits.json --dataset evals/datasets/qa_meinuohua.jsonl \
+    --threshold 1.5055 --top-n 5 --md evals/reports/refusal_signal_meinuohua.md
+```
+
+检索：`recall_at_5=1.0（26/26）`、`context_recall=1.0`、`mrr=0.9808`、`latency_p50=2541 ms`。
+新库没有 `eval_runs` 行，脚本自己解析到 `builtin -6.0`（日志里可见），所以下面的"threshold"列
+**一律用手算的 1.5055** 表示"现行阈值"（就是 `/health` 现在对 suhao 库报的那个值）。
+
+**`scope=block`（需求原始口径）——又一次恒假：**
+
+| 组合 | 可答误拒 ↓ | 同域难例拒答 ↑ | HR 拒答 | 全部不可答拒答 | 拒答率−误拒率 |
+|---|---|---|---|---|---|
+| threshold 1.5055 | 2/26=0.0769 | 10/24=0.4167 | 19/20=0.9500 | 29/44=0.6591 | +0.3397 |
+| signal | 0/26=0.0000 | **0/24=0.0000** | 0/20 | 0/44 | +0.0000 |
+| OR | 2/26=0.0769 | 10/24=0.4167 | 19/20 | 29/44 | +0.3397 |
+| AND | 0/26 | 0/24 | 0/20 | 0/44 | +0.0000 |
+
+第二份文档复现了同一个结论：块级口径下形态**一条都不缺**（美诺华每页同样全是百分比/日期）。
+
+**`scope=sentence`（形态必须在"与问题词面最重合的那一条"里）：**
+
+| 组合 | 可答误拒 ↓ | 同域难例拒答 ↑ | HR 拒答 | 全部不可答拒答 | 拒答率−误拒率 |
+|---|---|---|---|---|---|
+| threshold 1.5055 | 2/26=0.0769 | 10/24=0.4167 | 19/20=0.9500 | 29/44=0.6591 | +0.3397 |
+| signal | 3/26=0.1154 | 20/24=**0.8333** | 3/20=0.1500 | 23/44=0.5227 | +0.7179 |
+| **OR** | 5/26=0.1923 | 22/24=**0.9167** | 19/20 | 41/44=0.9318 | +0.7244 |
+| AND | 0/26=0.0000 | 8/24=0.3333 | 3/20 | 11/44=0.2500 | +0.3333 |
+
+### 4. 两份文档并排（同一张表，同一口径）
+
+| | suhao（59 页 / 28 难例 / 15 可答） | 美诺华（50 页 / 24 难例 / 26 可答） |
+|---|---|---|
+| signal 拒同域难例 | 19/28 = 0.6786 | **20/24 = 0.8333** |
+| OR(阈值, signal) | 20/28 = 0.7143 | **22/24 = 0.9167** |
+| signal 误拒可答 | 1/15 = 0.0667 | 3/26 = 0.1154 |
+| OR 误拒可答 | 1/15 = 0.0667 | 5/26 = 0.1923 |
+| 阈值误拒可答 | 0/15 = 0.0000 | **2/26 = 0.0769** |
+| 可答最低 top_score | 1.5759 | **0.0706** |
+
+配对（52 条难例合并，signal vs 阈值 1.5055）：两者都拒 20、**只 signal 拒 19**、只阈值拒 3、
+都漏 10 → McNemar 精确双侧 **p = 0.00086**（3 vs 19 的失衡不是抽样噪声）。
+
+分类（signal，两份文档各自独立）：`rate` 5/5 → 5/6；`amount` 6/8 → 6/6；
+`deadline` 6/7 → 6/6；`subject` **2/8 → 3/6**。前两类（含时限）在两份文档上都稳，
+`subject` 在两份文档上都弱——这是"形状"层面的复现，而不是单份文档的偶然。
+
+### 5. 结论
+
+**信号在新文档上仍有效，但幅度与代价都比第一份文档更保守地说明它不是一个"零成本"增益。**
+
+具体数字：
+
+1. `scope=sentence` 单独用：同域难例 **20/24 = 0.8333**（阈值 1.5055 只有 10/24 = 0.4167），
+   与阈值 OR 后 **22/24 = 0.9167**。方向、量级、分类结构都与第一份文档一致
+   （suhao 19/28 → OR 20/28；mnh 20/24 → OR 22/24）。
+2. `scope=block` 在第二份文档上**仍然 0/24**——这条结论是稳定的（恒假，不是偶发）。
+3. 增益的独立性有限：52 条难例里，signal 多拒 19 条、阈值多拒 3 条（p≈0.0009），
+   但**其中 24 条难例是我读过信号实现之后按四类模板写的**，不是盲测；能算独立的那一侧只有
+   误拒率（题在信号之前就存在），而它从 6.7% 升到 **11.5%**（OR 下 19.2%）。
+4. 阈值本身不跨文档：同一份 1.5055 在 suhao 上 0 误拒，在美诺华上 2/26 误拒
+   （可答最低分从 1.5759 掉到 0.0706）。**能迁移的是形态信号，不是分数**。
+
+**是否建议上线：不建议（现在）。**
+
+- 收益侧（多拒 20 条难例）成立，但成本侧关键指标变差了：OR 模式下每 5 个问题就有 1 个被误拒
+  （美诺华 5/26），而误拒是用户直接可见的错误，比"该拒没拒"更贵。
+- 4 条误拒（suhao 的 `qa-007`、美诺华的 `-043/-056/-065`）是**同一个缺陷**：答案条款在文档里，
+  但"与问题词面最重合的那一条"不是它，形态检查就判了缺项。两份文档各出现一次以上，
+  说明这不是这批题的噪声，而是 `_narrow_to_matching_clause` 这个启发式的系统性问题。
+- 也就是说：信号抓的是"读到的那条没有值"，能不能上线取决于**先选对条款**。在条款选择换成
+  不依赖词面重合的判别器（或改为对 top-k 全查、只在全都缺时才判拒）之前，默认路径不该接。
+- 若一定要接，唯一可接受形态是"只做提示、不做拒答"（在回答里加"文档未给出具体数值"的免责），
+  或把 `subject` 意图整个关掉（两份文档上 5/14，几乎等于没接）。
+
 ## 诚实边界
 
+- 美诺华那 24 条同域难例是**读过信号实现之后**按四类模板写的（非盲测）：增益侧（20/24、22/24）
+  可能被高估；能算独立的是误拒侧（`qa_default` 里 26 条可答题早于信号存在）。
 - judge 与被测模型是同一个模型（自评有偏差），已在报告里标注。
 - 评测集是合成的，不是真实用户日志；`false_refusal_rate` 的绝对值会偏乐观。
 - 缺项信号的词表/句式是中文、章程语境（`%`、元/万元、日/月、由…决定）；换英文合同或年报要重写形态，
