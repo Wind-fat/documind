@@ -32,6 +32,11 @@ jobs:
     env:
       # CI 不下载模型（~100MB）：hash embedder + 词面重排，行为与本地离线评测一致。
       # 测试自己也设了同样的默认值（tests/conftest.py），这里显式写一遍是为了让日志能看见。
+      #
+      # 代价（诚实记账）：CI 上是 **198 passed + 4 skipped**，本地是 202 passed。
+      # 那 4 条是 tests/test_rerank_perf.py 里需要 bge-reranker-base 权重的重排性能用例
+      # （`needs_model` 标记）。也就是说：**重排性能回归在 CI 上没有任何守护**，
+      # 只在本地跑。要补这一层得在 runner 上下载 ~100MB 权重并做缓存，属独立决策。
       DOCUMIND_EMBED_BACKEND: hash
       DOCUMIND_RERANK_BACKEND: lexical
     steps:
