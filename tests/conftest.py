@@ -14,8 +14,36 @@ os.environ.setdefault("DOCUMIND_DATABASE_URL", f"sqlite+aiosqlite:///{TEST_DB.as
 
 import sqlalchemy as sa  # noqa: E402
 
-from documind.db import Base, bump_index_version, get_engine, get_session_factory  # noqa: E402
+from documind.db import Base, Document, bump_index_version, get_engine, get_session_factory  # noqa: E402
 from documind.retrieve import store  # noqa: E402
+from documind.thresholds import corpus_fingerprint, corpus_fingerprint_from_hashes  # noqa: E402
+
+# ---- 语料指纹夹具（P1-12）----
+# 固定的假 sha256：指纹是可断言的常量，测试不需要真文件。两篇不同的 sha = 两份语料。
+TEST_CORPUS_SHA = "9f2c" + "0" * 60
+OTHER_CORPUS_SHA = "4d1e" + "1" * 60
+TEST_CORPUS_FP = corpus_fingerprint_from_hashes([TEST_CORPUS_SHA])
+
+
+async def seed_corpus(session, *shas: str) -> str:
+    """往库里放 1..n 篇文档（只为 `documents.sha256` 存在，检索用不到），返回语料指纹。
+
+    `/health.corpus_fp` 是从 `documents` 表读的，所以测试里"换一份语料"就是"库里多一篇文档"。
+
+    `embed_space` 填本进程的空间：否则 /health 会把它记成迁移前的无空间文档并报
+    `space_mismatch`，让与语料无关的断言跟着变。
+    """
+    from documind.embed import get_embedder
+
+    hashes = shas or (TEST_CORPUS_SHA,)
+    space = get_embedder().space
+    for i, sha in enumerate(hashes):
+        session.add(
+            Document(title=f"corpus-{i}-{sha[:4]}", filename=f"corpus-{i}.md", sha256=sha, embed_space=space)
+        )
+    await session.commit()
+    # 返回的是**整库**的指纹（多次调用 = 库里文档变多 = 换了一份语料），不是本次新增那几篇的
+    return await corpus_fingerprint(session)
 
 
 @pytest.fixture(scope="session", autouse=True)

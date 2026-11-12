@@ -20,6 +20,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from conftest import TEST_CORPUS_FP, seed_corpus
 
 from documind import pipeline
 from documind.app import app
@@ -229,6 +230,8 @@ async def test_calibration_grid_covers_actual_score_range():
 
 async def test_thresholds_are_bucketed_per_reranker(db, clean_settings):
     """两个 reranker 各自标定 → 两个桶，互不串；写回后生效值 == 标定值。"""
+    # 三元桶：语料也是键（P1-12），标定行必须带本库的语料指纹
+    await seed_corpus(db)
     lexical_rows = _rows([(-12.0, False), (-10.0, False), (-8.0, False), (-3.0, True), (-1.0, True)])
     cross_rows = _rows([(-2.0, False), (-0.5, False), (1.5, True), (3.0, True), (5.5, True)])
 
@@ -248,6 +251,7 @@ async def test_thresholds_are_bucketed_per_reranker(db, clean_settings):
                 n_cases=28,  # ≥ MIN_CALIBRATION_CASES(20)：小样本行按 provisional 处理，不生效
                 reranker=name,
                 embed_space=SPACE,
+                corpus_fp=TEST_CORPUS_FP,
                 recommended_threshold=value,
             )
         )
@@ -265,6 +269,7 @@ async def test_thresholds_are_bucketed_per_reranker(db, clean_settings):
 
 
 async def test_env_override_beats_calibration_and_flags_mismatch(db, monkeypatch, clean_settings):
+    await seed_corpus(db)
     db.add(
         EvalRun(
             strategy="structure",
@@ -272,6 +277,7 @@ async def test_env_override_beats_calibration_and_flags_mismatch(db, monkeypatch
             n_cases=28,  # ≥ MIN_CALIBRATION_CASES(20)：小样本行按 provisional 处理，不生效
             reranker="lexical",
             embed_space=SPACE,
+            corpus_fp=TEST_CORPUS_FP,
             recommended_threshold=-4.0,
         )
     )
@@ -293,6 +299,7 @@ async def test_env_override_beats_calibration_and_flags_mismatch(db, monkeypatch
 
 async def test_effective_threshold_changes_the_refusal_decision(db, clean_settings, monkeypatch):
     """写回之后，拒答判定用的是标定值，而不是那个 -6.0。"""
+    await seed_corpus(db)
     monkeypatch.delenv("DOCUMIND_REFUSAL_THRESHOLD", raising=False)
     monkeypatch.delenv("DOCUMIND_REFUSAL_RERANK_THRESHOLD", raising=False)
     get_settings.cache_clear()
@@ -303,6 +310,7 @@ async def test_effective_threshold_changes_the_refusal_decision(db, clean_settin
             n_cases=28,  # ≥ MIN_CALIBRATION_CASES(20)：小样本行按 provisional 处理，不生效
             reranker="lexical",
             embed_space=SPACE,
+            corpus_fp=TEST_CORPUS_FP,
             recommended_threshold=-4.0,
         )
     )

@@ -482,8 +482,13 @@ DOCUMIND_DATABASE_URL="sqlite+aiosqlite:///D:/code/documind/data/real_dashscope.
 ```
 
 去掉 `--dry-run` 之后 `/health` 变成 `source=calibrated`、`value=1.5055`、`calibrated_spaces=["text-embedding-v3@1024"]`。
+P1-12 之后同一条命令也回填 `corpus_fp`（缺省取当前库的指纹：`documents.sha256` 排序后再 sha256 的前 16 位），
+并把指纹打进 plan 行；三个桶键（`reranker` / `embed_space` / `corpus_fp`）齐了才会生效。
 
 ### 三种 `/health` 输出（真实，2026-11-08）
+
+> 下面三段是 P1-12 **之前**的实测输出：字段都还在，`value`/`source` 的判定规则只在"同空间换语料"这一种
+> 情形下变了（以前会继承，现在退回 builtin），文案里也都多了"语料"一项。新形状见本节末尾的 P1-12 小节。
 
 **① 老库：历史行只告警不生效**（`data/real_dashscope.db` 的副本，未回填；embedder=dashscope）
 
@@ -524,23 +529,58 @@ DOCUMIND_DATABASE_URL="sqlite+aiosqlite:///D:/code/documind/data/real_dashscope.
   "reason":"reranker=BAAI/bge-reranker-base · 向量空间 text-embedding-v3@1024 最近一次标定（eval_run=04ea166191d245c4，数据集 suhao，2026-11-08T00:30:36.058675）写回 1.5055；同空间没有更新的标定，环境变量未设置"}}
 ```
 
+### P1-12：桶键加语料指纹（同空间换语料不再继承）
+
+`eval_runs` 增 `corpus_fp`，解析时要求 `(reranker, embed_space, corpus_fp)` **三者全中**才用 calibrated。
+同一份语料（同一个库）指纹不变 → 行为与之前一致；库里文档集合一变（入库/删档），指纹就变，标定立刻不生效，
+`/health` 会把原因写出来并列出"已知哪些语料有标定值"——**只列不用**。
+
+真库（`documind.db`，3 篇 / 1365 块 / `BAAI/bge-small-zh-v1.5@512`）回填前后的实测片段：
+
+```json
+// 回填前：唯一一条标定行没有空间/语料标注 → 只告警、不生效
+{"corpus_fp":"d151118209dd277b",
+ "refusal_threshold":{"value":-6.0,"source":"builtin","calibrated":null,
+  "calibrated_spaces":[],"legacy_calibration":{"value":2.9397,"corpus_fp":"","embed_space":""},
+  "legacy_corpus_calibration":null,"other_corpus_calibration":null,"calibrated_corpora":[],
+  "warning":"……另有 1 条无空间标注的历史标定行 value=2.9397（eval_run=1c6a8159，数据集 default，n_cases=28，无语料指纹），按“历史通用值”处理：只告警、不生效……"}}
+```
+
+```json
+// 回填后（scripts/backfill_calibration_space.py，空间与语料都缺省取库自身）：三键齐 → 生效
+{"corpus_fp":"d151118209dd277b",
+ "refusal_threshold":{"value":2.9397,"source":"calibrated","calibrated":2.9397,
+  "calibrated_spaces":["BAAI/bge-small-zh-v1.5@512"],"legacy_calibration":null,
+  "calibrated_corpora":[{"corpus_fp":"d1511182","embed_space":"BAAI/bge-small-zh-v1.5@512",
+                         "dataset":"default","value":2.9397,"n_cases":28}],
+  "warning":""}}
+```
+
+再跑一次脚本是 no-op（`[ok] 没有需要回填的行`），所以回填可以安全重试。
+
 ### 回归测试
 
-`tests/test_threshold_space_bucket.py`（7 条），其中两条是这一节的事实：
+`tests/test_threshold_space_bucket.py`（9 条）+ `tests/test_schema_compat_thresholds.py`（3 条），钉住的事实：
 
 - `test_suhao_threshold_does_not_leak_into_meinuohua_space`：`1.5055`（无论带空间还是历史行）在
   另一个空间上解析时 `source=builtin`、`value=-6.0`、`calibrated=None`，且 `warning` 写明"未生效"。
-- `test_same_space_different_corpus_still_shares`：**把边界也钉住** —— suhao 与美诺华用的是同一个
-  `text-embedding-v3@1024`，所以空间分桶**拦不住**这条真实泄漏路径。它能生效的前提是那两批块在同一个库里；
-  真跨库时 `eval_runs` 不共享，才没有实际泄漏。要在同一库里隔离两份语料，桶键还需要语料维度（未做）。
+- `test_same_space_different_corpus_is_not_inherited`：**以前的已知缺陷，现在是反向断言** ——
+  suhao 与美诺华用的是同一个 `text-embedding-v3@1024`；同一份语料时 1.5055 生效，库里多一篇文档
+  （指纹变化）之后立刻退回 `builtin`，`other_corpus_calibration` 里带着旧指纹与旧值，`warning` 写明
+  "因为语料变了"，`calibrated_corpora` 列出已知语料（fp 前 8 位 + 数据集 + 值）但不生效。
+- `test_row_without_corpus_fp_is_advisory_only`：同空间但没有 `corpus_fp` 的老行 → 只告警、不生效，
+  并给出回填命令；`test_empty_library_never_applies_any_calibration`：空库（指纹空串）上任何标定都不生效。
 
 ### 已知未覆盖（写在这里而不是藏起来）
 
-1. `(reranker, embed_space)` 只区分"换 embedder"，不区分"同 embedder 换语料"。真实数据里 suhao 与美诺华
-   同空间，同一份 1.5055 在后者上误拒 2/26、同域难例只拒 10/24。
-2. 标定行没有"这份语料有多少题/多少页"的门槛，`n_cases` 只进 `metrics`，解析时不看。用小样本标出来的值
-   与 63 题标出来的值在 `/health` 里长得一样（只有 `calibrated_dataset` 能提示来源）。
-3. `eval_retrieval.py` 在一个**全新空库**上仍会因 `eval_runs` 不存在而报 `no such table`（它只补列不建表）；
+1. 语料指纹是**整库**的 `documents.sha256` 集合，不是"这台机器上的第 N 份 PDF"：同一个库里换掉一篇文档，
+   其余文档的标定也一起失效（宁可失效、不可误用；重跑一次标定即可）。
+2. 库是空的时候指纹是空串，空串同时是"这一列出现之前的行"的哨兵 —— 空库上的标定**永远不会生效**，
+   `/health` 会说明原因，回填脚本也拒绝用空串回填。
+3. 标定行没有"这份语料有多少题/多少页"的门槛，`n_cases` 只进 `metrics`，解析时只看 `n_cases` 是否 ≥
+   `MIN_CALIBRATION_CASES`。用小样本标出来的值与 63 题标出来的值在 `/health` 里长得一样
+   （只有 `calibrated_dataset` / `calibrated_corpora[].n_cases` 能提示来源）。
+4. `eval_retrieval.py` 在一个**全新空库**上仍会因 `eval_runs` 不存在而报 `no such table`（它只补列不建表）；
    用已存在的库或在之前跑一次 `init_db` 不受影响。这是既有行为，本单没改。
 
 ## 诚实边界

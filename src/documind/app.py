@@ -150,6 +150,9 @@ async def health(db: AsyncSession = Depends(get_db)) -> dict:
         "degraded": ["embedder"] if emb["degraded"] else [],
         "degraded_reason": emb["degraded_reason"],
         "index_version": fp.generation,
+        # 语料指纹（P1-12）：阈值的第三半桶键。入库/删文档都会变它，所以"标定为什么突然
+        # 不生效了"能在这里对上"因为库里的文档集合变了"（与 refusal_threshold.corpus_fp 同值）
+        "corpus_fp": thr.corpus_fp,
         # 指纹的其余两项：绕过写路径的裸 SQL 变更也能从 /health 看出来
         "index_fingerprint": {"documents": fp.documents, "chunks": fp.chunks, "tokens": fp.tokens},
         "llm": {"base_url": get_settings().llm_base_url, "model": get_settings().llm_model},
@@ -431,6 +434,8 @@ async def eval_runs(db: AsyncSession = Depends(get_db)) -> list[dict]:
                         "reranker": r.reranker,
                         # 空间是阈值桶键的另一半（P1-10）：空串 = 迁移前的历史行（不生效）
                         "embed_space": r.embed_space or "",
+                        # 语料是桶键的第三半（P1-12）：空串 = 这一列出现之前的行（不生效）
+                        "corpus_fp": r.corpus_fp or "",
                         "recommended_threshold": r.recommended_threshold,
                     }
         for r in rows

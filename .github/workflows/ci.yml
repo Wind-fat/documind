@@ -1,27 +1,132 @@
-name: ci
+name: CI
+
+# 一个仓一个 workflow，不跨仓 checkout：documind 的依赖全在 uv.lock 里，
+# `uv sync --frozen` 只消费 lock，CI 里绝不重新解析依赖（否则 lock 形同虚设）。
+#
+# 为什么矩阵要 windows：本仓的真实使用环境就是 Windows（`./.venv/Scripts/python.exe`），
+# 只跑 ubuntu 会漏掉路径分隔符/CRLF/sqlite 文件锁这类只在 Windows 上炸的问题。
+# py3.12 是 `requires-python` 的下界，3.13 是"下一个次版本先红在我们自己手里"。
 
 on:
   push:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+  tests:
+    name: pytest / ${{ matrix.os }} / py${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.12", "3.13"]
     env:
-      # CI 不下载 100MB 模型：hash embedder + 词面重排，行为与本地一致（报告里会标注用的哪个 embedder）
+      # CI 不下载模型（~100MB）：hash embedder + 词面重排，行为与本地离线评测一致。
+      # 测试自己也设了同样的默认值（tests/conftest.py），这里显式写一遍是为了让日志能看见。
       DOCUMIND_EMBED_BACKEND: hash
       DOCUMIND_RERANK_BACKEND: lexical
-      DOCUMIND_DATABASE_URL: sqlite+aiosqlite:///./ci.db
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      # pytest / ruff 是本仓的 optional-dependencies.dev：
+      # 不带 --extra dev 的 `uv sync --frozen` 装不出测试工具，pytest 会 command not found。
+      - name: uv sync --frozen
+        run: uv sync --frozen --extra dev
+
+      - name: pytest
+        run: uv run python -m pytest -q
+
+  lint:
+    name: ruff
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.12"
-          enable-cache: false
-      - run: uv sync --extra dev
-      - run: uv run ruff check src tests scripts
-      - run: uv run pytest -q
-      - name: 评测门禁（阈值不达标就让 PR 红）
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: uv sync --frozen
+        run: uv sync --frozen --extra dev
+
+      # `.` 而不是 `src tests scripts`：新增目录（比如以后的工具脚本）默认进检查范围，
+      # 不能靠"没加到白名单"来通过 lint。ruff 自身会跳过 .venv / .git。
+      - name: ruff check
+        run: uv run ruff check .
+
+  web:
+    name: web / tsc --noEmit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # web 有 lock（web/package-lock.json），所以用 npm ci：按 lock 精确复现，
+      # 不用 npm install 那种"顺手把 lock 改了"的语义。
+      - name: npm ci
+        run: npm ci
+
+      # 只做类型检查，不跑 next build：构建期需要后端可达（route.ts 会代理 /health），
+      # 类型检查不需要。这一层能在 PR 阶段就拦住 web/lib/types.ts 与后端契约的偏离。
+      - name: tsc --noEmit
+        run: npx --no-install tsc --noEmit
+
+  eval-gate:
+    name: 检索质量门禁
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      DOCUMIND_EMBED_BACKEND: hash
+      DOCUMIND_RERANK_BACKEND: lexical
+      DOCUMIND_DATABASE_URL: sqlite+aiosqlite:///./ci-gate.db
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: uv sync --frozen
+        run: uv sync --frozen --extra dev
+
+      # 阈值写死在 scripts/ci_eval_gate.py（hash 档比本地 bge 档低一档）：谁把检索或切块
+      # 改坏了，PR 直接红，不用等人看报告。输入是入仓的 3 份公开 PDF + qa_default.jsonl。
+      - name: 评测门禁（Recall@5 / Context Recall 低于阈值就红）
         run: uv run python scripts/ci_eval_gate.py

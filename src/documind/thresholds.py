@@ -1,27 +1,31 @@
-"""拒答阈值：按 `(reranker, embed_space)` 分桶、标定回写、启动/检索时解析（P1-03 / P1-10）。
+"""拒答阈值：按 `(reranker, embed_space, corpus_fp)` 分桶、标定回写、启动/检索时解析（P1-03 / P1-10 / P1-12）。
 
 之前的实情：`config.py` 一个 `-6.0` 被两个 reranker 共用，`evals/runner.py` 标定完
 只把建议写进报告，代码里**没有任何写入路径**——ADR-0004 说的"由评测集标定"
 在运行时并不成立。
 
 这里把阈值变成一个可追溯的对象：
-1. 桶的键是 `(reranker.name, embed_space)`。两个后端的分数域不同（cross-encoder 出 logits，
+1. 桶的键是 `(reranker.name, embed_space, corpus_fp)`。两个后端的分数域不同（cross-encoder 出 logits，
    LexicalReranker 是 [-12,0]）；更重要的是**同一套 reranker 换一份语料/一个向量空间，
    分数分布就整体平移**——2026-11-08 的交叉验证：同一条 1.5055 在 suhao 上"可答最低分 1.5759、
    0 误拒"，在美诺华上"可答最低分 0.0706、2/26 误拒"，同域难例只拒 10/24。
    只按 reranker 分桶会把这份差异静默继承下来，所以空间必须进桶键。
-2. 优先级：`DOCUMIND_REFUSAL_THRESHOLD`（显式覆盖） > 当前空间的最近标定值 > 内置占位值。
+   只按空间分桶仍然不够：两份语料用同一个 embedder 时空间相同（真实的 suhao / 美诺华就是），
+   所以语料指纹也必须进桶键——见 `corpus_fingerprint`。
+2. 优先级：`DOCUMIND_REFUSAL_THRESHOLD`（显式覆盖） > 当前 (空间, 语料) 的最近标定值 > 内置占位值。
    覆盖值与标定值不一致时**打警告并在 /health 暴露**——静默不一致就是下一次事故。
-3. 标定结果写回 `EvalRun.recommended_threshold` + `EvalRun.embed_space`，
+3. 标定结果写回 `EvalRun.recommended_threshold` + `EvalRun.embed_space` + `EvalRun.corpus_fp`，
    所以"最近一次标定"是数据库里的事实，不是报告里的字符串。
-4. 老库（迁移前的行）`embed_space=''`：**只告警、不生效**，按"历史通用值"处理。
-   理由见 `resolve_refusal_threshold`：一条无空间标注的行无法证明它属于哪个空间，
+4. 老库（迁移前的行）`embed_space=''` 或 `corpus_fp=''`：**只告警、不生效**，按"历史通用值"处理。
+   理由见 `resolve_refusal_threshold`：一条没有空间/语料标注的行无法证明它属于哪个桶，
    猜错就等于重现"跨库继承"这个事故。回填路径是显式的：`scripts/backfill_calibration_space.py`。
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
 from typing import Final
 
@@ -51,6 +55,12 @@ UNKNOWN_RERANKER_FALLBACK: Final[float] = -6.0
 # 老库行的空间标注（迁移前的行补列后就是这个值）。
 LEGACY_SPACE: Final[str] = ""
 
+# 语料指纹长度：16 位十六进制（64 bit）。碰撞概率远低于"两个库恰好同空间"这类真实事故；
+# 太长只会让 /health 与日志读不动，太短（如 8 位）在几十个库的量级上仍够用但没必要省。
+CORPUS_FP_LEN: Final[int] = 16
+# 行的语料标注缺失（本列出现之前的行）。空串**不是**通配符：只告警、不生效。
+LEGACY_CORPUS: Final[str] = ""
+
 log = logging.getLogger(__name__)
 
 
@@ -64,7 +74,8 @@ class ThresholdState:
     calibrated: float | None = None
     calibrated_run: str = ""
     calibrated_at: str = ""
-    # 这条标定是在哪份数据集/语料上标出来的：同空间不同语料是**已知未覆盖**的边界
+    # 这条标定是在哪份数据集上标出来的。真正的桶键是 corpus_fp（同空间换语料不继承，P1-12），
+    # dataset 只是给人看的名字（同一个 dataset 名可以对应不同的库）。
     calibrated_dataset: str = ""
     mismatch: bool = False
     warning: str = ""
@@ -79,6 +90,15 @@ class ThresholdState:
     legacy_calibration: dict | None = None
     # 同空间但样本量不足的行（n_cases < MIN_CALIBRATION_CASES）：**provisional，未生效**
     provisional_calibration: dict | None = None
+    # ---- P1-12 新增：语料维度 ----
+    # 本库当前语料指纹（16 hex；空库/读不到时为空串）
+    corpus_fp: str = ""
+    # 已知**有合格标定**的语料清单（fp 前 8 位 + 数据集名 + 值 + 空间）。纯参考，不代表生效。
+    calibrated_corpora: list[dict] = field(default_factory=list)
+    # 同空间、但标定时是**另一份语料**的最新标定：**未生效**（语料变了）
+    other_corpus_calibration: dict | None = None
+    # 同空间、但这一列出现之前的行（没有语料指纹）：**未生效**
+    legacy_corpus_calibration: dict | None = None
     # 为什么现在生效的是这个值（始终有值，含 source=calibrated 的正常路径）
     reason: str = ""
 
@@ -140,6 +160,7 @@ def current_embed_space() -> str:
 def _calibration_payload(row: EvalRun) -> dict:
     return {
         "embed_space": row.embed_space or LEGACY_SPACE,
+        "corpus_fp": row.corpus_fp or LEGACY_CORPUS,
         "value": float(row.recommended_threshold),  # type: ignore[arg-type]
         "run": row.id,
         # 这个值是几道题标出来的：小于 MIN_CALIBRATION_CASES 的行只配当 provisional
@@ -149,6 +170,40 @@ def _calibration_payload(row: EvalRun) -> dict:
         "at": row.created_at.isoformat() if row.created_at else "",
         "dataset": row.dataset or "",
     }
+
+
+def corpus_fingerprint_from_hashes(hashes: Iterable[str]) -> str:
+    """`documents.sha256` 集合 → 语料指纹（排序后拼接再 sha256，取前 `CORPUS_FP_LEN` 位）。
+
+    为什么要"排序后再哈希"而不是 `sha256(concatenation)`：入库顺序不同（并行 ingest、
+    先导 A 再导 B vs 反过来）不该产生不同指纹——同一份语料必须只有一个桶。
+    空集合/全是空串 → 空串（"没有语料可指纹"，不是通配符）。
+    """
+    hs = sorted(h for h in hashes if h)
+    if not hs:
+        return ""
+    return hashlib.sha256("\n".join(hs).encode("utf-8")).hexdigest()[:CORPUS_FP_LEN]
+
+
+async def corpus_fingerprint(session: AsyncSession) -> str:
+    """当前**库**的语料指纹。
+
+    注意它指的是库里 documents 的集合，不是进程状态：同一个进程换库、或同一个库又入库了
+    一份新文档，指纹都会变——这正是"语料变了，标定不再适用"要能被看见的原因。
+
+    读不到 documents（极老库/只建了 eval_runs 的脚本库）时返回空串并告警：空串会让所有
+    标定都不生效，也就是退回内置占位——安全的失败方向，而不是猜一个语料出来。
+    """
+    try:
+        hashes = (await session.execute(sa.select(Document.sha256).order_by(Document.sha256))).scalars().all()
+    except sa.exc.SQLAlchemyError as exc:
+        log.warning(
+            "无法读取库的语料指纹（%s: %s），按未知语料处理：所有标定值不生效，退回内置占位",
+            type(exc).__name__,
+            exc,
+        )
+        return ""
+    return corpus_fingerprint_from_hashes(hashes)
 
 
 async def _latest(
@@ -178,17 +233,21 @@ async def _latest(
     return (await session.execute(stmt)).scalars().first()
 
 
-async def latest_calibration(session: AsyncSession, reranker: str, embed_space: str) -> dict | None:
-    """`(reranker, embed_space)` 桶里最近一次标定。
+async def latest_calibration(
+    session: AsyncSession, reranker: str, embed_space: str, corpus_fp: str = LEGACY_CORPUS
+) -> dict | None:
+    """`(reranker, embed_space, corpus_fp)` 三元桶里最近一次标定。
 
-    空间为空串时**不查**：空串是"老库行/未知空间"的哨兵，不是可用的桶键。
+    空间或语料指纹为空串时**不查**：空串是"老库行/未知"的哨兵，不是可用的桶键
+    （拿它当通配符就等于跨库继承，而那正是本模块要消灭的行为）。
     """
-    if not embed_space:
+    if not embed_space or not corpus_fp:
         return None
     row = await _latest(
         session,
         EvalRun.reranker == reranker,
         EvalRun.embed_space == embed_space,
+        EvalRun.corpus_fp == corpus_fp,
     )
     return _calibration_payload(row) if row is not None else None
 
@@ -210,19 +269,95 @@ async def provisional_calibration(
 
 
 async def calibrated_spaces(session: AsyncSession, reranker: str) -> list[str]:
-    """该 reranker 已知有**合格**标定的向量空间（不含老库空空间行、不含 provisional）。"""
+    """该 reranker 已知有**可生效**标定的向量空间。
+
+    不含老库空空间行、不含 provisional、也不含没有语料指纹的行（那种行在任何空间都不生效，
+    报成"这个空间有标定"只会让运维以为它在起作用）。
+    """
     stmt = (
         sa.select(EvalRun.embed_space)
         .where(
             EvalRun.reranker == reranker,
             EvalRun.recommended_threshold.is_not(None),
             EvalRun.embed_space != LEGACY_SPACE,
+            EvalRun.corpus_fp != LEGACY_CORPUS,
             EvalRun.n_cases >= MIN_CALIBRATION_CASES,
         )
         .distinct()
         .order_by(EvalRun.embed_space)
     )
     return [s for s in (await session.execute(stmt)).scalars().all() if s]
+
+
+async def calibrated_corpora(session: AsyncSession, reranker: str) -> list[dict]:
+    """该 reranker 已知有**合格**标定的语料清单：`fp 前 8 位 + 数据集名 + 值`（+ 空间/时间）。
+
+    只做说明用：`/health` 在回退 builtin 时靠它回答"那我的标定值都去哪了"。
+    每个 `(语料指纹, 空间)` 只报最近一条，避免同一只库反复标定把列表撑成日志。
+    """
+    stmt = (
+        sa.select(EvalRun)
+        .where(
+            EvalRun.reranker == reranker,
+            EvalRun.recommended_threshold.is_not(None),
+            EvalRun.corpus_fp != LEGACY_CORPUS,
+            EvalRun.n_cases >= MIN_CALIBRATION_CASES,
+        )
+        .order_by(EvalRun.created_at.desc())
+    )
+    out: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for row in (await session.execute(stmt)).scalars().all():
+        key = (row.corpus_fp, row.embed_space)
+        if key in seen:
+            continue
+        seen.add(key)
+        payload = _calibration_payload(row)
+        out.append(
+            {
+                # 只报前 8 位：这是给人对"是不是我那个库"的，不是给机器匹配的键
+                "corpus_fp": row.corpus_fp[:8],
+                "embed_space": payload["embed_space"],
+                "dataset": payload["dataset"],
+                "value": payload["value"],
+                "n_cases": payload["n_cases"],
+                "run": payload["run"],
+                "at": payload["at"],
+            }
+        )
+    return out
+
+
+async def other_corpus_calibration(
+    session: AsyncSession, reranker: str, embed_space: str, corpus_fp: str
+) -> dict | None:
+    """同空间、**另一份语料**上最新的一条标定：只用于解释"因为语料变了，所以不生效"。"""
+    if not embed_space:
+        return None
+    row = await _latest(
+        session,
+        EvalRun.reranker == reranker,
+        EvalRun.embed_space == embed_space,
+        EvalRun.corpus_fp != LEGACY_CORPUS,
+        # 指纹未知（空库/读不到）时不排除任何语料：反正都用不上，宁可把候选值报出来
+        EvalRun.corpus_fp != (corpus_fp or "\x00"),
+    )
+    return _calibration_payload(row) if row is not None else None
+
+
+async def legacy_corpus_calibration(
+    session: AsyncSession, reranker: str, embed_space: str
+) -> dict | None:
+    """同空间、但没有语料指纹的行（本列出现之前写入）。只告警、不生效。"""
+    if not embed_space:
+        return None
+    row = await _latest(
+        session,
+        EvalRun.reranker == reranker,
+        EvalRun.embed_space == embed_space,
+        EvalRun.corpus_fp == LEGACY_CORPUS,
+    )
+    return _calibration_payload(row) if row is not None else None
 
 
 async def other_space_calibration(
@@ -254,7 +389,12 @@ def _fmt(payload: dict) -> str:
     ds = payload.get("dataset") or "数据集未知"
     n = payload.get("n_cases")
     n_txt = f"，n_cases={n}" if n is not None else ""
-    return f"value={payload['value']:.4f}（eval_run={payload['run']}，数据集 {ds}{n_txt}，{at}）"
+    fp = payload.get("corpus_fp") or ""
+    fp_txt = f"，语料 {fp[:8]}" if fp else "，无语料指纹"
+    return (
+        f"value={payload['value']:.4f}"
+        f"（eval_run={payload['run']}，数据集 {ds}{n_txt}{fp_txt}，{at}）"
+    )
 
 
 def calibration_gate(n_cases: int) -> tuple[bool, str]:
@@ -340,26 +480,34 @@ async def resolve_refusal_threshold(
     reranker: str,
     embed_space: str | None = None,
     library: list[dict] | None = None,
+    corpus_fp: str | None = None,
 ) -> ThresholdState:
     """解析当前**实际生效**的拒答阈值，并解释它与标定值的关系。
 
-    桶键 = `(reranker, embed_space)`。落回 builtin 的情形各有专门字段与文案：
-    - 当前空间无标定、别的空间有 → `other_space_calibration` + 警告（值**不生效**）；
+    桶键 = `(reranker, embed_space, corpus_fp)`。落回 builtin 的情形各有专门字段与文案：
+    - 当前空间没标定、别的空间有 → `other_space_calibration` + 警告（值**不生效**）；
+    - 同空间、但是**另一份语料** → `other_corpus_calibration` + 警告（值**不生效**，"语料变了"）；
+    - 同空间、但没有语料指纹的老行 → `legacy_corpus_calibration` + 警告（**不生效**，给回填命令）；
     - 老库空空间行 → `legacy_calibration` + 警告（值**不生效**，给回填命令）；
     - 同空间只有小样本行 → `provisional_calibration` + 警告（**不生效**，见 MIN_CALIBRATION_CASES）；
     - 完全没标定 → 警告提示去跑标定。
 
-    `embed_space=None` 时取当前 embedder 的空间；拿不到就是空串（未知空间，不匹配任何标定）。
+    `embed_space=None` 时取当前 embedder 的空间；`corpus_fp=None` 时读当前库的
+    `corpus_fingerprint(session)`。任一为空串（未知空间 / 空库 / 读不到 documents）都不匹配
+    任何标定——空串是"未知"的哨兵，不是通配符。`/health` 把算出来的指纹一并透出
+    （`corpus_fp`），所以"为什么退回内置占位"能对上"因为库里的文档集合变了"。
     `library`（`/health` 传入）非 None 时额外判定"进程空间是否在库里有数据"，
     不一致就把"检索会 409"写进警告——不改任何 source 语义，只补一句人话。
     警告只在真有问题时打日志并写进返回对象（/health 直接透出），
     因为"日志里说过"等于没人知道。
     """
     space = current_embed_space() if embed_space is None else embed_space
-    cal = await latest_calibration(session, reranker, space)
+    fp = await corpus_fingerprint(session) if corpus_fp is None else corpus_fp
+    cal = await latest_calibration(session, reranker, space, fp)
     spaces = await calibrated_spaces(session, reranker)
+    corpora = await calibrated_corpora(session, reranker)
     override = env_override()
-    bucket = f"reranker={reranker} · 向量空间 {space or '（未知）'}"
+    bucket = f"reranker={reranker} · 向量空间 {space or '（未知）'} · 语料 {fp or '（未知）'}"
 
     if override is not None:
         state = ThresholdState(
@@ -372,9 +520,11 @@ async def resolve_refusal_threshold(
             calibrated_dataset=cal["dataset"] if cal else "",
             embed_space=space,
             calibrated_spaces=spaces,
+            corpus_fp=fp,
+            calibrated_corpora=corpora,
             reason=(
                 f"DOCUMIND_REFUSAL_THRESHOLD={override:.4f} 显式覆盖（优先级最高，{bucket}）；"
-                + (f"该空间最近标定值 {cal['value']:.4f} 被覆盖" if cal else "该空间没有标定值可对比")
+                + (f"该语料最近标定值 {cal['value']:.4f} 被覆盖" if cal else "该语料没有标定值可对比")
             ),
         )
         if cal and abs(override - cal["value"]) > 1e-9:
@@ -395,10 +545,12 @@ async def resolve_refusal_threshold(
             calibrated_dataset=cal["dataset"],
             embed_space=space,
             calibrated_spaces=spaces,
+            corpus_fp=fp,
+            calibrated_corpora=corpora,
             reason=(
                 f"{bucket} 最近一次标定（eval_run={cal['run']}，数据集 "
                 f"{cal['dataset'] or '未知'}，{cal['at'] or '时间未知'}）写回 {cal['value']:.4f}；"
-                "同空间没有更新的标定，环境变量未设置"
+                "同一份语料没有更新的标定，环境变量未设置"
             ),
         )
     else:
@@ -406,12 +558,29 @@ async def resolve_refusal_threshold(
         legacy = await legacy_calibration(session, reranker)
         provisional = await provisional_calibration(session, reranker, space)
         other = await other_space_calibration(session, reranker, space) if space else None
+        other_corpus = await other_corpus_calibration(session, reranker, space, fp) if space else None
+        legacy_corpus = await legacy_corpus_calibration(session, reranker, space) if space else None
 
         if not space:
             warning = (
                 f"无法确定当前向量空间（embedder 不可用），{bucket} 的标定值无从匹配，"
                 f"拒答阈值退回内置占位 {value:.4f}；库里的标定值一律不生效，"
                 "修好 embedder 配置后 /health 才会给出可解释的值"
+            )
+        elif other_corpus is not None and not fp:
+            warning = (
+                f"本库当前没有文档（语料指纹为空），{bucket} 无法归属任何标定，"
+                f"拒答阈值退回内置占位 {value:.4f}；已知语料 {other_corpus['corpus_fp'][:8] or '（无）'} "
+                f"上有标定值 {_fmt(other_corpus)}，但**未生效**——阈值不跨语料继承"
+            )
+        elif other_corpus is not None:
+            warning = (
+                f"向量空间 {space} 有标定值 {other_corpus['value']:.4f}，但它是在**另一份语料**上标出来的"
+                f"（标定语料 {other_corpus['corpus_fp'][:8]}，本库语料 {fp[:8]}，"
+                f"数据集 {other_corpus['dataset'] or '未知'}）；**未生效**——"
+                "阈值不跨语料继承：同一个 embedder 下换一份文档，top_score 分布整体平移"
+                "（suhao 的 1.5055 在美诺华上误拒 2/26、同域难例只拒 10/24）。"
+                f"拒答阈值退回内置占位 {value:.4f}；要让标定在本库生效，请在本库重跑一次标定"
             )
         elif other is not None:
             warning = (
@@ -425,6 +594,15 @@ async def resolve_refusal_threshold(
             warning = (
                 f"{bucket} 还没有标定值，使用内置占位 {value:.4f}；"
                 "跑一次 `documind eval` 才有可追溯的阈值"
+            )
+
+        if legacy_corpus is not None:
+            warning += (
+                f"。同空间还有 1 条没有语料指纹的历史标定行 {_fmt(legacy_corpus)}，"
+                "按“历史通用值”处理：只告警、不生效（不知道它是在哪份语料上标的，"
+                "自动归属就等于重现跨语料继承）。确认后跑 "
+                "`python scripts/backfill_calibration_space.py`"
+                "（默认取库里唯一的空间 + 本库语料指纹）回填"
             )
 
         if legacy is not None:
@@ -448,14 +626,20 @@ async def resolve_refusal_threshold(
             source="builtin",
             embed_space=space,
             calibrated_spaces=spaces,
+            corpus_fp=fp,
+            calibrated_corpora=corpora,
             other_space_calibration=other,
+            other_corpus_calibration=other_corpus,
             legacy_calibration=legacy,
+            legacy_corpus_calibration=legacy_corpus,
             provisional_calibration=provisional,
             warning=warning,
             reason=(
-                f"{bucket} 没有任何可生效的标定值（该空间无标定"
-                + ("、其它空间有但按空间隔离不用" if other is not None else "")
+                f"{bucket} 没有任何可生效的标定值（该语料无标定"
+                + ("、别的空间有但按空间隔离不用" if other is not None else "")
+                + ("、同空间别的语料有但按语料隔离不用" if other_corpus is not None else "")
                 + ("、仅有无空间标注的历史行不用" if legacy is not None else "")
+                + ("、仅有缺语料指纹的历史行不用" if legacy_corpus is not None else "")
                 + ("、仅有过样本量不足的 provisional 行" if provisional is not None else "")
                 + f"），故使用内置占位 {value:.4f}"
             ),
@@ -473,15 +657,17 @@ async def resolve_refusal_threshold(
 
 
 def describe_calibration(
-    reranker: str, recommended: dict, n_rows: int, embed_space: str = ""
+    reranker: str, recommended: dict, n_rows: int, embed_space: str = "", corpus_fp: str = ""
 ) -> dict:
     """把标定结果整理成可写回的行字段（runner 用）。
 
-    `embed_space` 必须与**入库时用的向量空间**一致，否则写回的行不会在该空间生效。
+    `embed_space` / `corpus_fp` 必须与**入库时**的向量空间与语料一致，否则写回的行
+    不会在该桶生效（后者由 `corpus_fingerprint(session)` 给出）。
     """
     return {
         "reranker": reranker,
         "embed_space": embed_space,
+        "corpus_fp": corpus_fp,
         "recommended_threshold": float(recommended["threshold"]),
         "n_cases": n_rows,
     }

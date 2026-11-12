@@ -56,7 +56,12 @@ async def main(args: argparse.Namespace) -> dict:
     from documind.generate import _pre_llm_refusal
     from documind.rerank import get_reranker
     from documind.retrieve import retrieve
-    from documind.thresholds import calibration_gate, current_embed_space, resolve_refusal_threshold
+    from documind.thresholds import (
+        calibration_gate,
+        corpus_fingerprint,
+        current_embed_space,
+        resolve_refusal_threshold,
+    )
 
     # 表结构必须在读写 eval_runs 之前就位。这里用 init_db 而不是 ensure_schema_compat：
     # 后者只给**已存在的表**补列，在一个全新空 sqlite 文件上会直接
@@ -76,6 +81,10 @@ async def main(args: argparse.Namespace) -> dict:
 
     async with get_session_factory()() as session:
         thr = await resolve_refusal_threshold(session, reranker.name, space)
+        # 桶键的第三半（P1-12）：标定行必须记住"是在哪份语料上标的"，否则同一 embedder
+        # 下换一份文档时这行会被当成可用的标定（suhao 的 1.5055 落到美诺华上误拒 2/26）。
+        corpus = await corpus_fingerprint(session)
+        print(f"[corpus] 语料指纹 {corpus or '（空库：标定行将无法归属任何语料）'}", flush=True)
         print(f"[reranker] {reranker.name} · 拒答阈值 {thr.value:.4f}（来源 {thr.source}）"
               f" · max_tokens={getattr(reranker, 'max_tokens', '-')}"
               f" · batch={getattr(reranker, 'batch_size', '-')}", flush=True)
@@ -165,6 +174,8 @@ async def main(args: argparse.Namespace) -> dict:
                             reranker=reranker.name,
                             # 空间必须落库：不带它，这一行在解析时属于"历史通用值"，永远不生效（P1-10）
                             embed_space=space,
+                            # 语料指纹同理（P1-12）：同一 embedder 下换一份文档，这行仍然不该生效
+                            corpus_fp=corpus,
                             recommended_threshold=float(summary["recommended_threshold"]),
                         )
                     )

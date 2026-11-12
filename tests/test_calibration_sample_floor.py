@@ -16,6 +16,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from conftest import TEST_CORPUS_FP, seed_corpus
 
 from documind.app import app
 from documind.db import EvalRun
@@ -76,6 +77,7 @@ def test_calibrate_threshold_flags_small_sample_as_provisional() -> None:
 
 async def test_small_sample_row_is_provisional_not_calibrated(db) -> None:
     """直接插入一条 n_cases=5 的行（模拟老脚本/裸 SQL）：读侧必须仍然给 builtin。"""
+    await seed_corpus(db)
     db.add(
         EvalRun(
             strategy="structure",
@@ -83,6 +85,7 @@ async def test_small_sample_row_is_provisional_not_calibrated(db) -> None:
             n_cases=5,
             reranker="lexical",
             embed_space=SPACE,
+            corpus_fp=TEST_CORPUS_FP,
             recommended_threshold=-4.0,
         )
     )
@@ -107,6 +110,7 @@ async def test_small_sample_row_is_provisional_not_calibrated(db) -> None:
 
 async def test_small_sample_row_does_not_shadow_a_real_calibration(db) -> None:
     """正式标定 + 一条更新的小样本行：生效的必须是正式那条，且警告解释小样本行为何被跳过。"""
+    await seed_corpus(db)
     db.add(
         EvalRun(
             strategy="structure",
@@ -114,6 +118,7 @@ async def test_small_sample_row_does_not_shadow_a_real_calibration(db) -> None:
             n_cases=28,
             reranker="lexical",
             embed_space=SPACE,
+            corpus_fp=TEST_CORPUS_FP,
             recommended_threshold=-4.5,
         )
     )
@@ -125,6 +130,7 @@ async def test_small_sample_row_does_not_shadow_a_real_calibration(db) -> None:
             n_cases=5,
             reranker="lexical",
             embed_space=SPACE,
+            corpus_fp=TEST_CORPUS_FP,
             recommended_threshold=-2.0,
         )
     )

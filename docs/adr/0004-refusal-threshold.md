@@ -57,5 +57,26 @@
    默认取库自身的 `documents.embed_space` 而不是进程的空间。
 3. 写路径：`evals/runner.py` 与 `scripts/eval_retrieval.py --write` 都带空间落库。
 
-**没有解决**：两份语料共用同一个 embedder 时空间相同，标定值仍会互相生效（真实数据就是这种情况）。
-跨语料隔离需要语料维度的桶键，本 ADR 不做——不要用"已按空间分桶"当作跨库问题已解决的证据。
+**当时没有解决**（P1-12 已修，见下一节）：两份语料共用同一个 embedder 时空间相同，标定值仍会互相生效
+（真实数据就是这种情况）。**不要**用"已按空间分桶"当作跨库问题已解决的证据。
+
+## 修订（P1-12，2026-11）：桶键加语料指纹
+
+**事实**：suhao 与美诺华用的是同一个 embedder `text-embedding-v3@1024`，所以 `(reranker, embed_space)`
+这一层根本不区分它们：1.5055 在后一份上误拒 2/26、同域难例只拒 10/24。空间分桶拦的是"换 embedder"，
+不是"换语料"。
+
+**决策**：桶键 = `(reranker.name, embed_space, corpus_fp)`，`eval_runs` 增 `corpus_fp` 列。
+
+1. `corpus_fp` = 当前库 `documents.sha256` **排序后**再 sha256 的前 16 位；空库为空串。
+   排序是必须的：同一份语料、不同入库顺序不该产生两个桶。
+2. 解析：三者全中才用 calibrated；空间相同、语料不同 → 退回 builtin，`/health` 用
+   `other_corpus_calibration` + `warning`（"因为语料变了"）解释，并用 `calibrated_corpora`
+   列出已知语料（fp 前 8 位 + 数据集名 + 值）——**只列不用**。
+3. 迁移前的行 `corpus_fp=''`（以及空空间行）：**只告警、不生效**，回填仍是显式命令
+   `scripts/backfill_calibration_space.py`（`--corpus-fp` 缺省取库的指纹，幂等、有 `--dry-run`）。
+4. 写路径（`evals/runner.py`、`scripts/eval_retrieval.py --write`）把标定时库的指纹一并落库。
+
+**代价**：语料指纹是**整库**的集合指纹——同一个库里换掉一篇文档，其余文档的标定也一起失效。
+这是有意的取舍：失效会被 `/health` 报出来、重跑一次标定即可恢复；静默继承一个属于别的语料的阈值
+则是线上误拒，没人能从返回值里看出来。

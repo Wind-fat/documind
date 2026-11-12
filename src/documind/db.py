@@ -157,6 +157,11 @@ class EvalRun(Base):
     # 语义与 documents.embed_space 同一个域（`Embedder.space`）。空串 = 迁移前的历史行，
     # 无法证明它属于哪个空间 → 解析时按"历史通用值"处理（只告警、不生效）。
     embed_space: Mapped[str] = mapped_column(String(96), default="", index=True)
+    # 阈值的第三半桶键（P1-12）：标定时**库里那份语料**的指纹（`documents.sha256` 排序后再
+    # sha256 的前 16 位；空库为空串）。只按空间分桶拦不住"同一 embedder 换一份语料"——
+    # suhao 与美诺华都用 text-embedding-v3@1024，同一条 1.5055 在后一份上误拒 2/26。
+    # 空串 = 这一列出现之前的行（无法证明是在哪份语料上标的）→ 只告警、不生效。
+    corpus_fp: Mapped[str] = mapped_column(String(64), default="", index=True)
     recommended_threshold: Mapped[float | None] = mapped_column(nullable=True)
     created_at: Mapped[dt.datetime] = mapped_column(default=_now)
 

@@ -10,7 +10,7 @@
 ```json
 {"status":"ok","documents":3,"chunks":912,"embedder":"BAAI/bge-small-zh-v1.5","embed_dim":512,
  "embed_space":"BAAI/bge-small-zh-v1.5@512","embedder_backend":"bge",
- "degraded":[],"degraded_reason":"","index_version":7,
+ "degraded":[],"degraded_reason":"","index_version":7,"corpus_fp":"d151118209dd277b",
  "index_fingerprint":{"documents":3,"chunks":912,"tokens":184320},
  "llm":{"base_url":"http://127.0.0.1:3425/v1","model":"qwen-cn/qwen3.8-flash"},
  "refusal_threshold":{"reranker":"BAAI/bge-reranker-base","value":-4.25,"source":"calibrated",
@@ -20,13 +20,13 @@
 ```
 `index_version` 是**库里的**索引版本（`index_state.version`），不是进程内计数器：别的进程入库后
 它会变，读者据此重建内存索引（P1-04）。`index_fingerprint` 是版本之外的兜底指纹（文档数/块数/token 总数），
-所以绕过写路径的裸 SQL 变更也能看出来。
+所以绕过写路径的裸 SQL 变更也能看出来。`corpus_fp` 是**库的语料指纹**（阈值的第三半桶键，见下）。
 
 `degraded` 非空表示发生了自动降级（目前只有 `embedder`：bge 拉不下来退到 hash），原因在 `degraded_reason`。
 **别忽略这一项**：降级后检索质量会掉，而接口仍返回 200。
 
-`refusal_threshold` 是**当前实际生效**的拒答阈值与它的来源（P1-03 / P1-10）。桶键是
-**`(reranker, embed_space)` 两项**，不是只有 reranker：
+`refusal_threshold` 是**当前实际生效**的拒答阈值与它的来源（P1-03 / P1-10 / P1-12）。桶键是
+**`(reranker, embed_space, corpus_fp)` 三项**，不是只有 reranker：
 
 ```json
 "refusal_threshold":{
@@ -35,10 +35,14 @@
   "mismatch":false,
   "warning":"向量空间 hash-bigram@512 还没有标定值，拒答阈值退回内置占位 -6.0000；已知空间 text-embedding-v3@1024 有标定值 value=1.5055（eval_run=04ea1661，数据集 suhao，2026-11-08T00:30:36），但**未生效**——阈值不跨空间继承 ……",
   "embed_space":"hash-bigram@512",
+  "corpus_fp":"d151118209dd277b",
   "calibrated_spaces":["text-embedding-v3@1024"],
-  "other_space_calibration":{"embed_space":"text-embedding-v3@1024","value":1.5055,"run":"04ea1661","at":"2026-11-08T00:30:36","dataset":"suhao"},
+  "calibrated_corpora":[{"corpus_fp":"0ad0c947","embed_space":"text-embedding-v3@1024","dataset":"suhao","value":1.5055,"n_cases":63,"run":"04ea1661","at":"2026-11-08T00:30:36"}],
+  "other_space_calibration":{"embed_space":"text-embedding-v3@1024","corpus_fp":"0ad0c947…","value":1.5055,"run":"04ea1661","at":"2026-11-08T00:30:36","dataset":"suhao"},
+  "other_corpus_calibration":null,
   "legacy_calibration":null,
-  "reason":"reranker=BAAI/bge-reranker-base · 向量空间 hash-bigram@512 没有任何可生效的标定值（该空间无标定、其它空间有但按空间隔离不用），故使用内置占位 -6.0000"
+  "legacy_corpus_calibration":null,
+  "reason":"reranker=BAAI/bge-reranker-base · 向量空间 hash-bigram@512 · 语料 d151118209dd277b 没有任何可生效的标定值（该语料无标定、别的空间有但按空间隔离不用），故使用内置占位 -6.0000"
 }
 ```
 
@@ -49,13 +53,17 @@
 | `calibrated_spaces` | 该 reranker 已知**有标定**的空间列表（不含迁移前的空空间行）；`embed_space` 不在里面就说明本空间没有标定 |
 | `other_space_calibration` | 别的空间上最新的一条标定：**仅供参考、未生效**（`null` = 没有） |
 | `legacy_calibration` | `embed_space=''` 的历史行（迁移前写入）：**只告警、不生效**（`null` = 没有） |
+| `corpus_fp` | 本库当前语料指纹（`documents.sha256` 排序后再 sha256 的前 16 位；空库为空串），顶层同名同值 |
+| `calibrated_corpora` | 该 reranker 已知**有合格标定**的语料清单：`corpus_fp`（前 8 位）+ `dataset` + `value`（+ 空间/题数/run）。**只列不用** |
+| `other_corpus_calibration` | 同空间、**另一份语料**上最新的一条标定：**未生效**（`null` = 没有）。语料变了就说这里 |
+| `legacy_corpus_calibration` | 同空间、但 `corpus_fp=''` 的历史行（这一列出现之前写入）：**只告警、不生效** |
 | `reason` | 为什么现在生效的是这个值（始终有内容，含 `source=calibrated` 的正常路径） |
-| `calibrated_dataset` | 这条标定是在哪份数据集上标的（同空间不同语料是已知未覆盖的边界，见下） |
+| `calibrated_dataset` | 这条标定是在哪份数据集上标的（同一份数据集不等于同一份语料，真正的键是 `corpus_fp`） |
 
 | `source` | 含义 |
 |---|---|
 | `env` | `DOCUMIND_REFUSAL_THRESHOLD` 显式覆盖（优先）。与**本空间**最近标定值不一致时 `mismatch=true`、`warning` 写明两者、空间与 eval_run id |
-| `calibrated` | `(reranker, embed_space)` 桶里最近一次标定写回的 `eval_runs.recommended_threshold` |
+| `calibrated` | `(reranker, embed_space, corpus_fp)` 桶里最近一次标定写回的 `eval_runs.recommended_threshold` |
 | `builtin` | 本空间没有可生效的标定值，用的是内置占位（`warning` 说明是"从未标定"、"别的空间有但未生效"，还是"只有无空间标注的历史行"） |
 
 规则（P1-10，`src/documind/thresholds.py`）：
@@ -66,8 +74,13 @@
 - **迁移前的行（`embed_space=''`）只告警不生效**：无标注的行无法证明属于哪个空间，自动猜一个等于
   重现跨库继承。确认空间后跑 `scripts/backfill_calibration_space.py`（默认取库里 `documents.embed_space`
   的唯一值，不取进程的空间）回填，回填后 `/health` 立刻变 `calibrated`。
-- **已知未覆盖**：两份语料共用同一个 embedder 时空间相同，标定值仍会互相生效——空间分桶拦的是
-  "换 embedder"，不是"换语料"。跨语料的隔离需要语料维度的桶键（尚未实现，见 `evals/README.md`）。
+- **不跨语料继承**（P1-12）：桶键的第三个成员是 `eval_runs.corpus_fp`——标定时**库**的语料指纹
+  （`documents.sha256` 排序后再 sha256 的前 16 位，空库为空串）。两份语料共用同一个 embedder 时空间相同，
+  但指纹不同：`source` 退回 `builtin`，`other_corpus_calibration` 报出那条标定（含它当时的指纹），
+  `warning` 写明"因为语料变了"，`calibrated_corpora` 列出已知语料但**不生效**。
+- **迁移前的行（`corpus_fp=''`）只告警不生效**：跟空空间行同一个道理——不知道它是在哪份语料上标的，
+  自动归属就等于重现跨语料继承（1.5055 在美诺华上误拒 2/26）。跑
+  `scripts/backfill_calibration_space.py` 回填（空间与语料指纹都缺省取库自身，幂等，支持 `--dry-run`）。
 
 ## GET /documents
 ```json

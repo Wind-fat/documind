@@ -20,7 +20,7 @@ from ..embed import embedder_health
 from ..generate import answer_question
 from ..llm import LLMClient, get_llm
 from ..retrieve import retrieve
-from ..thresholds import MIN_CALIBRATION_CASES, resolve_refusal_threshold
+from ..thresholds import MIN_CALIBRATION_CASES, corpus_fingerprint, resolve_refusal_threshold
 from .metrics import aggregate, citation_validity, judge_answer, retrieval_metrics
 from .report import write_reports
 
@@ -123,6 +123,10 @@ async def run_eval(
     # 写一条永远不生效的数字只会在 /evals/runs 里制造"有标定"的假象（P1-11）。
     rec_value = float(calibration["recommended"]["threshold"])
     provisional = bool(calibration["provisional"])
+    # 桶键的第三半（P1-12）：这批题是在**这个库的这份语料**上跑的。不记它，同一 embedder
+    # 下换一份文档时这行会被当成可用的标定（真实事故：suhao 的 1.5055 在美诺华上误拒 2/26）。
+    corpus = await corpus_fingerprint(session)
+    print(f"[corpus] 语料指纹 {corpus or '（空库：标定行将无法归属任何语料）'}")
     if provisional:
         print(
             f"[calibration] n_cases={calibration['n_cases']} < {calibration['min_cases']}："
@@ -140,6 +144,8 @@ async def run_eval(
                 reranker=reranker,
                 # 空间是桶键的另一半（P1-10）：不带它，这行标定在解析时不可达
                 embed_space=embedder["space"],
+                # 语料是桶键的第三半（P1-12）：同一 embedder 下换一份文档，这行也不该生效
+                corpus_fp=corpus,
                 recommended_threshold=None if provisional else rec_value,
             )
         )
@@ -149,6 +155,7 @@ async def run_eval(
         "calibration": calibration,
         "reranker": reranker,
         "embed_space": embedder["space"],
+        "corpus_fp": corpus,
         "recommended_threshold": rec_value,
         **report,
         "details": details,
